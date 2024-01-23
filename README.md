@@ -1,2 +1,12 @@
 # hocr
-Transcribe image of hieroglyphic to Unicode
+
+Transcribe (OCR) image of hieroglyphic to Unicode
+
+## To run
+
+```
+unzip newgardiner.zip
+python names.py
+python train.py
+python transcribe.py
+```
