@@ -6,6 +6,7 @@ Transcribe (OCR) image of hieroglyphic to Unicode
 
 ```
 cd src
+unzip gardiner.zip
 unzip newgardiner.zip
 python names.py
 python train.py

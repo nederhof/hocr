@@ -5,33 +5,32 @@ import os
 import sys
 import heapq
 
-from imageprocessing import area, image_to_vec, Segment, image_to_segments
+from imageprocessing import area, MIN_SEGMENT_AREA, image_to_vec, Segment, image_to_segments
 from names import get_insertions
 from controls import Horizontal, Vertical, Basic
-from train import default_font_dir
+from train import default_model_dir
 
 name_to_insertions = get_insertions()
 
-default_dir = 'newgardiner'
-beam_width = 10
+BEAM_WIDTH = 10
 
 class FontInfo:
-	def __init__(self, prototype_dir):
-		with open(os.path.join(prototype_dir, 'chars.pickle'), 'rb') as handle:
+	def __init__(self, model_dir):
+		with open(os.path.join(model_dir, 'chars.pickle'), 'rb') as handle:
 			self.chars = pickle.load(handle)
-		with open(os.path.join(prototype_dir, 'partss.pickle'), 'rb') as handle:
+		with open(os.path.join(model_dir, 'partss.pickle'), 'rb') as handle:
 			self.partss = pickle.load(handle)
-		with open(os.path.join(prototype_dir, 'embeddingscore.pickle'), 'rb') as handle:
+		with open(os.path.join(model_dir, 'embeddingscore.pickle'), 'rb') as handle:
 			self.embeddings_core = pickle.load(handle)
-		with open(os.path.join(prototype_dir, 'embeddingsfull.pickle'), 'rb') as handle:
+		with open(os.path.join(model_dir, 'embeddingsfull.pickle'), 'rb') as handle:
 			self.embeddings_full = pickle.load(handle)
-		with open(os.path.join(prototype_dir, 'aspectscore.pickle'), 'rb') as handle:
+		with open(os.path.join(model_dir, 'aspectscore.pickle'), 'rb') as handle:
 			self.aspects_core = pickle.load(handle)
-		with open(os.path.join(prototype_dir, 'aspectsfull.pickle'), 'rb') as handle:
+		with open(os.path.join(model_dir, 'aspectsfull.pickle'), 'rb') as handle:
 			self.aspects_full = pickle.load(handle)
-		with open(os.path.join(prototype_dir, 'scaler.pickle'), 'rb') as handle:
+		with open(os.path.join(model_dir, 'scaler.pickle'), 'rb') as handle:
 			self.scaler = pickle.load(handle)
-		with open(os.path.join(prototype_dir, 'pca.pickle'), 'rb') as handle:
+		with open(os.path.join(model_dir, 'pca.pickle'), 'rb') as handle:
 			self.pca = pickle.load(handle)
 
 	def image_to_embedding(self, im):
@@ -62,22 +61,43 @@ def conditional_squared_dist(vals1, aspect1, vals2, aspect2):
 	else:
 		return sys.float_info.max
 
+def conditional_squared_dist_all(vals1, aspect1, vals_core, vals_full, aspect2):
+	if aspects_similar(aspect1, aspect2):
+		if vals_full is not None:
+			return squared_dist(vals1, vals_full)
+		else:
+			return squared_dist(vals1, vals_core)
+	else:
+		return sys.float_info.max
+
 def find_closest_core(embedding, aspect, k, fontinfo):
 	dists = [conditional_squared_dist(embedding, aspect, e, a) for (e, a) \
 					in zip(fontinfo.embeddings_core, fontinfo.aspects_core)]
 	indexes = heapq.nlargest(k, range(len(dists)), key=lambda i: -dists[i])
 	return indexes
 
-def classify_image(im, k, fontinfo):
+def find_closest_full(embedding, aspect, k, fontinfo):
+	dists = [conditional_squared_dist_all(embedding, aspect, ec, ef, a) for (ec, ef, a) \
+				in zip(fontinfo.embeddings_core, fontinfo.embeddings_full, fontinfo.aspects_core)]
+	indexes = heapq.nlargest(k, range(len(dists)), key=lambda i: -dists[i])
+	return indexes
+
+def classify_image_core(im, k, fontinfo):
 	embedding = fontinfo.image_to_embedding(im)
 	w, h = im.size
 	aspect = w / h
 	return find_closest_core(embedding, aspect, k, fontinfo)
 
-def classify_segments(segments, fontinfo):
+def classify_image_full(im, k, fontinfo):
+	embedding = fontinfo.image_to_embedding(im)
+	w, h = im.size
+	aspect = w / h
+	return find_closest_full(embedding, aspect, k, fontinfo)
+
+def classify_segments_core(segments, fontinfo):
 	classifieds = []
 	for segment in segments:
-		ch_indexes = classify_image(segment.im, beam_width, fontinfo)
+		ch_indexes = classify_image_core(segment.im, BEAM_WIDTH, fontinfo)
 		classifieds.append(ClassifiedSegment(segment, ch_indexes))
 	return classifieds
 
@@ -146,9 +166,9 @@ def find_best_chars(classifieds_list, fontinfo):
 
 def image_to_signs(im, fontinfo):
 	segments = image_to_segments(im)
-	segments = [segment for segment in segments if area(segment.im) > 6]
+	segments = [segment for segment in segments if area(segment.im) >= MIN_SEGMENT_AREA]
 	segments = sorted(segments, key=lambda s: -area(s.im))
-	classifieds_list = classify_segments(segments, fontinfo)
+	classifieds_list = classify_segments_core(segments, fontinfo)
 	classifieds = find_best_chars(classifieds_list, fontinfo)
 	return classifieds
 
@@ -183,12 +203,15 @@ def partition_ver(signs):
 		y_max = sign.segment.y + sign.segment.im.size[1]
 		while len(signs) > 0:
 			y_max_old = y_max
-			for i in reversed(range(len(signs))):
+			i = 0
+			while i < len(signs):
 				sign = signs[i]
 				if sign.segment.y <= y_max:
 					group.append(sign)
 					y_max = max(y_max, sign.segment.y + sign.segment.im.size[1])
 					signs.pop(i)
+				else:
+					i = i+1
 			if y_max == y_max_old:
 				break
 		groups.append(group)
@@ -265,18 +288,18 @@ def image_to_encoding(im, fontinfo, dir=None):
 
 # for testing can be used without parameters
 if __name__ == '__main__':
-	from names import get_names
+	from names import get_unicode_to_name
 	from imageprocessing import normalize_image
-	image = 'tests/test2.png'
+	image = 'tests/test1.png'
 	direction = 'h'
-	font_dir = default_font_dir
+	model_dir = default_model_dir
 	if len(sys.argv) >= 2:
 		image = sys.argv[1]
 	if len(sys.argv) >= 3:
 		direction = sys.argv[2]
 	if len(sys.argv) >= 4:
-		font_dir = sys.argv[3]
-	fontinfo = FontInfo(default_dir)
+		model_dir = sys.argv[3]
+	fontinfo = FontInfo(model_dir)
 	im = normalize_image(Image.open(image))
 	encoding = image_to_encoding(im, fontinfo, dir=direction)
-	print(' '.join([get_names()[ch] for ch in encoding]))
+	print(' '.join([get_unicode_to_name()[ch] for ch in encoding]))

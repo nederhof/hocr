@@ -7,10 +7,11 @@ import re
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
-from names import get_names, numerals, composite, repeated_single
+from names import get_unicode_to_name, numerals, composite, repeated_single
 from imageprocessing import normalize_image, area, image_to_vec, image_to_segments
 
-default_font_dir = 'newgardiner'
+default_font_dirs = ['gardiner', 'newgardiner']
+default_model_dir = 'model'
 default_pca_dim = 30
 
 def split(im):
@@ -53,36 +54,37 @@ def get_prototype(path, name):
 		aspect_full = None
 	return parts, vec_core, vec_full, aspect_core, aspect_full
 
-def get_prototypes(prototype_dir):
-	names = get_names()
-	prototype_files = os.listdir(prototype_dir)
+def get_prototypes(prototype_dirs):
+	names = get_unicode_to_name()
 	chars = []
 	partss = []
 	vecs_core = []
 	vecs_full = []
 	aspects_core = []
 	aspects_full = []
-	for filename in prototype_files:
-		path = os.path.join(prototype_dir, filename)
-		base, ext = os.path.splitext(filename)
-		codepoint = re.sub('-[0-9]+', '', base)
-		if ext == '.png':
-			ch = chr(int(codepoint))
-			name = names[ch]
-			if name in numerals or name in repeated_single:
-				continue
-			parts, vec_core, vec_full, aspect_core, aspect_full = get_prototype(path, name)
-			chars.append(ch)
-			partss.append(parts)
-			vecs_core.append(vec_core)
-			vecs_full.append(vec_full)
-			aspects_core.append(aspect_core)
-			aspects_full.append(aspect_full)
+	for prototype_dir in prototype_dirs:
+		prototype_files = os.listdir(prototype_dir)
+		for filename in prototype_files:
+			path = os.path.join(prototype_dir, filename)
+			base, ext = os.path.splitext(filename)
+			codepoint = re.sub('-[0-9]+', '', base)
+			if ext == '.png':
+				ch = chr(int(codepoint))
+				name = names[ch]
+				if name in numerals or name in repeated_single:
+					continue
+				parts, vec_core, vec_full, aspect_core, aspect_full = get_prototype(path, name)
+				chars.append(ch)
+				partss.append(parts)
+				vecs_core.append(vec_core)
+				vecs_full.append(vec_full)
+				aspects_core.append(aspect_core)
+				aspects_full.append(aspect_full)
 	return chars, partss, vecs_core, vecs_full, aspects_core, aspects_full
 
-def train(prototype_dir, pca_dim):
+def train(prototype_dirs, model_dir, pca_dim):
 	chars, partss, vecs_core, vecs_full, aspects_core, aspects_full = \
-			get_prototypes(prototype_dir)
+			get_prototypes(prototype_dirs)
 	scaler = StandardScaler()
 	scaled_core = scaler.fit_transform(vecs_core)
 	pca = PCA(n_components=pca_dim)
@@ -95,28 +97,29 @@ def train(prototype_dir, pca_dim):
 			scaled = scaler.transform([vec])[0]
 			embedding = pca.transform([scaled])[0]
 			embeddings_full.append(embedding)
-	with open(os.path.join(prototype_dir, 'chars.pickle'), 'wb') as handle:
+	if not os.path.exists(model_dir):
+		os.mkdir(model_dir)
+	with open(os.path.join(model_dir, 'chars.pickle'), 'wb') as handle:
 		pickle.dump(chars, handle)
-	with open(os.path.join(prototype_dir, 'partss.pickle'), 'wb') as handle:
+	with open(os.path.join(model_dir, 'partss.pickle'), 'wb') as handle:
 		pickle.dump(partss, handle)
-	with open(os.path.join(prototype_dir, 'embeddingscore.pickle'), 'wb') as handle:
+	with open(os.path.join(model_dir, 'embeddingscore.pickle'), 'wb') as handle:
 		pickle.dump(embeddings_core, handle)
-	with open(os.path.join(prototype_dir, 'embeddingsfull.pickle'), 'wb') as handle:
+	with open(os.path.join(model_dir, 'embeddingsfull.pickle'), 'wb') as handle:
 		pickle.dump(embeddings_full, handle)
-	with open(os.path.join(prototype_dir, 'aspectscore.pickle'), 'wb') as handle:
+	with open(os.path.join(model_dir, 'aspectscore.pickle'), 'wb') as handle:
 		pickle.dump(aspects_core, handle)
-	with open(os.path.join(prototype_dir, 'aspectsfull.pickle'), 'wb') as handle:
+	with open(os.path.join(model_dir, 'aspectsfull.pickle'), 'wb') as handle:
 		pickle.dump(aspects_full, handle)
-	with open(os.path.join(prototype_dir, 'scaler.pickle'), 'wb') as handle:
+	with open(os.path.join(model_dir, 'scaler.pickle'), 'wb') as handle:
 		pickle.dump(scaler, handle)
-	with open(os.path.join(prototype_dir, 'pca.pickle'), 'wb') as handle:
+	with open(os.path.join(model_dir, 'pca.pickle'), 'wb') as handle:
 		pickle.dump(pca, handle)
 
 if __name__ == '__main__':
-	font_dir = default_font_dir
+	font_dirs = default_font_dirs
+	model_dir = default_model_dir
 	pca_dim = default_pca_dim
 	if len(sys.argv) >= 2:
-		font_dir = sys.argv[1]
-	if len(sys.argv) >= 3:
-		pca_dim = int(sys.argv[2])
-	train(font_dir, pca_dim)
+		pca_dim = int(sys.argv[1])
+	train(font_dirs, model_dir, pca_dim)
