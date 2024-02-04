@@ -12,3 +12,5 @@ python names.py
 python train.py
 python transcribe.py
 ```
+
+This is experimental code at an early stage of development.
