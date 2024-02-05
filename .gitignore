@@ -1,5 +1,5 @@
-src/names/insertions.pickle
-src/names/names.pickle
+src/signlist/insertions.pickle
+src/signlist/names.pickle
 src/gardiner
 src/newgardiner
 src/__pycache__

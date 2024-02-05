@@ -402,13 +402,11 @@ class Extractor(tk.Frame):
 			sub = tk.Toplevel()
 			Storer(sub, segment.im, self.classify)
 
-pages_dir = 'tmp'
-
 if __name__ == '__main__':
 	if len(sys.argv) < 2:
 		exit(0)
 	page = sys.argv[1]
-	filename = os.path.join(pages_dir, page + '.png')
+	filename = page + '.png'
 	root = tk.Tk()
 	app = Extractor(root)
 	app.set_image(filename)

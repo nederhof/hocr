@@ -6,13 +6,14 @@ import sys
 import heapq
 
 from imageprocessing import area, MIN_SEGMENT_AREA, image_to_vec, Segment, image_to_segments
-from names import get_insertions
+from tables import get_insertions
 from controls import Horizontal, Vertical, Basic
 from train import default_model_dir
 
 name_to_insertions = get_insertions()
 
 BEAM_WIDTH = 10
+OVERLAP_RATIO = 8
 
 class FontInfo:
 	def __init__(self, model_dir):
@@ -94,6 +95,8 @@ def classify_image_full(im, k, fontinfo):
 	aspect = w / h
 	return find_closest_full(embedding, aspect, k, fontinfo)
 
+Z1 = chr(78820)
+
 def classify_segments_core(segments, fontinfo):
 	classifieds = []
 	for segment in segments:
@@ -164,12 +167,25 @@ def find_best_chars(classifieds_list, fontinfo):
 		i = i+1
 	return classifieds
 
+# Hack to avoid Z1 being confused with narrow signs that normally appear bigger.
+# If sign tall (aspect ratio < 0.3) and narrower than 1/9 of widest sign and lower than
+# 1/3 of tallest sign, then it probably is Z1.
+def correct_Z1(sign, widest, tallest):
+	w, h = sign.segment.im.size
+	ratio = w / h
+	if w < widest / 9 and h < tallest / 3 and ratio < 0.3:
+		sign.ch = Z1
+
 def image_to_signs(im, fontinfo):
 	segments = image_to_segments(im)
 	segments = [segment for segment in segments if area(segment.im) >= MIN_SEGMENT_AREA]
+	widest = max([segment.im.size[0] for segment in segments])
+	tallest = max([segment.im.size[1] for segment in segments])
 	segments = sorted(segments, key=lambda s: -area(s.im))
 	classifieds_list = classify_segments_core(segments, fontinfo)
 	classifieds = find_best_chars(classifieds_list, fontinfo)
+	for sign in classifieds:
+		correct_Z1(sign, widest, tallest)
 	return classifieds
 
 def partition_hor(signs):
@@ -184,9 +200,11 @@ def partition_hor(signs):
 			x_max_old = x_max
 			for i in reversed(range(len(signs))):
 				sign = signs[i]
-				if sign.segment.x <= x_max:
+				sign_w = sign.segment.im.size[0]
+				min_overlap = min(x_max-x_min, sign_w)/OVERLAP_RATIO
+				if sign.segment.x <= x_max - min_overlap:
 					group.append(sign)
-					x_max = max(x_max, sign.segment.x + sign.segment.im.size[0])
+					x_max = max(x_max, sign.segment.x + sign_w)
 					signs.pop(i)
 			if x_max == x_max_old:
 				break
@@ -206,9 +224,11 @@ def partition_ver(signs):
 			i = 0
 			while i < len(signs):
 				sign = signs[i]
-				if sign.segment.y <= y_max:
+				sign_h = sign.segment.im.size[1]
+				min_overlap = min(y_max-y_min, sign_h)/OVERLAP_RATIO
+				if sign.segment.y <= y_max - min_overlap:
 					group.append(sign)
-					y_max = max(y_max, sign.segment.y + sign.segment.im.size[1])
+					y_max = max(y_max, sign.segment.y + sign_h)
 					signs.pop(i)
 				else:
 					i = i+1
@@ -261,14 +281,16 @@ def topgroup_to_structure(group):
 def versubgroup_to_structure(group):
 	groups = partition_hor(group)
 	if len(groups) > 1:
-		return Horizontal([horsubgroup_to_structure(g) for g in groups])
+		subgroups = [horsubgroup_to_structure(g) for g in groups]
+		return Horizontal(subgroups)
 	else:
 		return basic_to_structure(group)
 
 def horsubgroup_to_structure(group):
 	groups = partition_ver(group)
 	if len(groups) > 1:
-		return Vertical([versubgroup_to_structure(g) for g in groups])
+		subgroups = [versubgroup_to_structure(g) for g in groups]
+		return Vertical(subgroups)
 	else:
 		return basic_to_structure(group)
 
@@ -288,9 +310,9 @@ def image_to_encoding(im, fontinfo, dir=None):
 
 # for testing can be used without parameters
 if __name__ == '__main__':
-	from names import get_unicode_to_name
+	from tables import get_unicode_to_name
 	from imageprocessing import normalize_image
-	image = 'tests/test1.png'
+	image = 'tests/test9.png'
 	direction = 'h'
 	model_dir = default_model_dir
 	if len(sys.argv) >= 2:

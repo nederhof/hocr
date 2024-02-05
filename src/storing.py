@@ -4,7 +4,7 @@ import json
 import tkinter as tk
 from PIL import Image, ImageTk
 
-from names import get_name_to_unicode, get_unicode_to_name
+from tables import get_name_to_unicode, get_unicode_to_name
 from transcribe import FontInfo, classify_image_full
 
 name_to_unicode = get_name_to_unicode()

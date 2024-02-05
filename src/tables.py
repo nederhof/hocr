@@ -4,10 +4,10 @@ import json
 
 from controls import TS, BS, TE, BE, M, T, B
 
-names_dir = 'names'
+signlist_dir = 'signlist'
 
 def get_name_to_unicode():
-	filename = os.path.join(names_dir, 'unipoints.json')
+	filename = os.path.join(signlist_dir, 'unipoints.json')
 	with open(filename, 'r') as f:
 		name_to_unicode = json.load(f)
 	return name_to_unicode
@@ -15,12 +15,12 @@ def get_name_to_unicode():
 def make_names():
 	name_to_unicode = get_name_to_unicode()
 	names = {chr(u): n for n, u in name_to_unicode.items()}
-	picklename = os.path.join(names_dir, 'names.pickle')
+	picklename = os.path.join(signlist_dir, 'names.pickle')
 	with open(picklename, 'wb') as handle:
 		pickle.dump(names, handle)
 
 def get_unicode_to_name():
-	picklename = os.path.join(names_dir, 'names.pickle')
+	picklename = os.path.join(signlist_dir, 'names.pickle')
 	with open(picklename, 'rb') as handle:
 		names = pickle.load(handle)
 	return names
@@ -58,7 +58,7 @@ corner_position = { 'ts': [0,0], 'bs': [0,1], 'te': [1,0], 'be': [1,1], \
 corner_control = { 'ts': TS, 'bs': BS, 'te': TE, 'be': BE, 'm': M, 't': T, 'b': B }
 
 def make_insertions():
-	filename = os.path.join(names_dir, 'insertions.json')
+	filename = os.path.join(signlist_dir, 'insertions.json')
 	with open(filename, 'r') as f:
 		name_to_insertions = json.load(f)
 	insertions = {}
@@ -73,12 +73,12 @@ def make_insertions():
 						insertions[name][control][0] = glyph[corner]['x']
 					if 'y' in glyph[corner]:
 						insertions[name][control][1] = glyph[corner]['y']
-	picklename = os.path.join(names_dir, 'insertions.pickle')
+	picklename = os.path.join(signlist_dir, 'insertions.pickle')
 	with open(picklename, 'wb') as handle:
 		pickle.dump(insertions, handle)
 
 def get_insertions():
-	picklename = os.path.join(names_dir, 'insertions.pickle')
+	picklename = os.path.join(signlist_dir, 'insertions.pickle')
 	with open(picklename, 'rb') as handle:
 		insertions = pickle.load(handle)
 	return insertions

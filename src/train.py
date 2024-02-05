@@ -7,7 +7,7 @@ import re
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
-from names import get_unicode_to_name, numerals, composite, repeated_single
+from tables import get_unicode_to_name, numerals, composite, repeated_single
 from imageprocessing import normalize_image, area, image_to_vec, image_to_segments
 
 default_font_dirs = ['gardiner', 'newgardiner']

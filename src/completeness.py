@@ -1,7 +1,7 @@
 import re
 import os 
 
-from names import get_unicode_to_name, numerals
+from tables import get_unicode_to_name, numerals
 
 def get_basenames(d):
 	bases = set()
