@@ -7,7 +7,7 @@ import heapq
 
 from imageprocessing import area, MIN_SEGMENT_AREA, image_to_vec, Segment, image_to_segments
 from tables import get_insertions
-from controls import Horizontal, Vertical, Basic
+from controls import Horizontal, Vertical, Basic, Z1
 from train import default_model_dir
 
 name_to_insertions = get_insertions()
@@ -44,6 +44,23 @@ class ClassifiedSegment:
 	def __init__(self, segment, ch):
 		self.segment = segment
 		self.ch = ch
+
+	@staticmethod
+	def bounds(segments):
+		if len(segments) == 0:
+			return None
+		segment = segments[0].segment
+		x_min = segment.x
+		y_min = segment.y
+		x_max = segment.x + segment.im.size[0]
+		y_max = segment.y + segment.im.size[1]
+		for i in range(1, len(segments)):
+			segment_i = segments[i].segment
+			x_min = min(x_min, segment_i.x)
+			y_min = min(y_min, segment_i.y)
+			x_max = max(x_max, segment_i.x + segment_i.im.size[0])
+			y_max = max(y_max, segment_i.y + segment_i.im.size[1])
+		return x_min, y_min, x_max, y_max
 
 def aspects_similar(aspect1, aspect2):
 	if aspect1 < 0.3 or 1/aspect1 < 0.3:
@@ -94,8 +111,6 @@ def classify_image_full(im, k, fontinfo):
 	w, h = im.size
 	aspect = w / h
 	return find_closest_full(embedding, aspect, k, fontinfo)
-
-Z1 = chr(78820)
 
 def classify_segments_core(segments, fontinfo):
 	classifieds = []
@@ -188,6 +203,24 @@ def image_to_signs(im, fontinfo):
 		correct_Z1(sign, widest, tallest)
 	return classifieds
 
+def rejoin_hor(groups):
+	i = 0
+	while i+1 < len(groups):
+		group = groups[i]
+		group_next = groups[i+1]
+		_, min_y, _, max_y = ClassifiedSegment.bounds(group)
+		_, min_y_next, _, max_y_next = ClassifiedSegment.bounds(group_next)
+		mid = (min_y + max_y) / 2
+		mid_next = (min_y_next + max_y_next) / 2
+		if max_y < mid_next and max_y > min_y_next and len(group_next) > 1 or \
+				min_y > mid_next and min_y < max_y_next and len(group_next) > 1 or \
+				max_y_next < mid and max_y_next > min_y and len(group) > 1 or \
+				min_y_next > mid and min_y_next < max_y and len(group) > 1:
+			groups[i] = groups[i] + groups.pop(i+1)
+		else:
+			i = i+1
+	return groups
+
 def partition_hor(signs):
 	signs = sorted(signs, key=lambda s: s.segment.x)
 	groups = []
@@ -198,7 +231,8 @@ def partition_hor(signs):
 		x_max = sign.segment.x + sign.segment.im.size[0]
 		while len(signs) > 0:
 			x_max_old = x_max
-			for i in reversed(range(len(signs))):
+			i = 0
+			while i < len(signs):
 				sign = signs[i]
 				sign_w = sign.segment.im.size[0]
 				min_overlap = min(x_max-x_min, sign_w)/OVERLAP_RATIO
@@ -206,10 +240,12 @@ def partition_hor(signs):
 					group.append(sign)
 					x_max = max(x_max, sign.segment.x + sign_w)
 					signs.pop(i)
+				else:
+					i = i+1
 			if x_max == x_max_old:
 				break
 		groups.append(group)
-	return groups
+	return rejoin_hor(groups)
 
 def partition_ver(signs):
 	signs = sorted(signs, key=lambda s: s.segment.y)
@@ -301,27 +337,35 @@ def image_to_encoding(im, fontinfo, dir=None):
 		dir = 'v' if h > w else 'h'
 	if dir == 'h':
 		groups = partition_hor(signs)
-		encodings = [horsubgroup_to_structure(group).to_unicode() for group in groups]
+		encodings = [horsubgroup_to_structure(group).normalize().to_unicode() for group in groups]
 	else:
 		groups = partition_ver(signs)
-		encodings = [versubgroup_to_structure(group).to_unicode() for group in groups]
+		encodings = [versubgroup_to_structure(group).normalize().to_unicode() for group in groups]
 	encoding = ''.join(encodings)
 	return encoding
+
+def print_transcription(filename, fontinfo, unicode_to_name):
+	im = normalize_image(Image.open(filename))
+	encoding = image_to_encoding(im, fontinfo, dir=direction)
+	print(' '.join([unicode_to_name[ch] for ch in encoding]))
 
 # for testing can be used without parameters
 if __name__ == '__main__':
 	from tables import get_unicode_to_name
 	from imageprocessing import normalize_image
-	image = 'tests/test9.png'
+	images = [\
+		'tests/test1.png', 'tests/test2.png', 'tests/test3.png', 'tests/test4.png', 'tests/test5.png',
+		'tests/test6.png', 'tests/test7.png', 'tests/test8.png', 'tests/test9.png', 'tests/test10.png',
+		'tests/test11.png', 'tests/test12.png', 'tests/test13.png', 'tests/test14.png', 'tests/test15.png']
 	direction = 'h'
 	model_dir = default_model_dir
 	if len(sys.argv) >= 2:
-		image = sys.argv[1]
+		images = [sys.argv[1]]
 	if len(sys.argv) >= 3:
 		direction = sys.argv[2]
 	if len(sys.argv) >= 4:
 		model_dir = sys.argv[3]
 	fontinfo = FontInfo(model_dir)
-	im = normalize_image(Image.open(image))
-	encoding = image_to_encoding(im, fontinfo, dir=direction)
-	print(' '.join([get_unicode_to_name()[ch] for ch in encoding]))
+	unicode_to_name = get_unicode_to_name()
+	for filename in images:
+		print_transcription(filename, fontinfo, unicode_to_name)

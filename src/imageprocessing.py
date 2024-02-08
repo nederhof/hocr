@@ -1,6 +1,7 @@
 from PIL import Image, ImageChops
 import numpy as np
 import math
+import statistics
 
 binarize = False
 block_prototype = True
@@ -27,9 +28,22 @@ def transparency_to_white(im):
 	converted.paste(im, mask=im)
 	return converted
 
+def make_image(w, h, pixels):
+	im = white_image(w, h)
+	for (x,y) in pixels:
+		im.putpixel((x,y), 0)
+	return im
+
 def area(im):
 	w, h = im.size
 	return w * h
+
+def in_image(im, x, y):
+	w, h = im.size
+	return 0 <= x and x < w and 0 <= y and y < h
+
+def is_white(im, x, y):
+	return in_image(im, x, y) and im.getpixel((x,y)) > BLACK_THRESHOLD
 
 def image_to_vec(im):
 	if block_prototype:
@@ -64,7 +78,7 @@ def find_component(im, visited, x, y):
 	to_visit = [(x,y)]
 	while len(to_visit) > 0:
 		(x1,y1) = to_visit.pop()
-		if 0 <= x1 and x1 < w and 0 <= y1 and y1 < h and (x1,y1) not in visited:
+		if in_image(im, x1, y1) and (x1,y1) not in visited:
 			p = im.getpixel((x1,y1))
 			if p <= BLACK_THRESHOLD:
 				visited.add((x1,y1))
@@ -74,6 +88,20 @@ def find_component(im, visited, x, y):
 						if x_diff != 0 or y_diff != 0:
 							to_visit.append((x1+x_diff,y1+y_diff))
 	return component
+
+def visit_white(im, visited, x, y):
+	w, h = im.size
+	to_visit = [(x,y)]
+	while len(to_visit) > 0:
+		(x1,y1) = to_visit.pop()
+		if in_image(im, x1, y1) and (x1,y1) not in visited:
+			p = im.getpixel((x1,y1))
+			if p > BLACK_THRESHOLD:
+				visited.add((x1,y1))
+				for x_diff in [-1,0,1]:
+					for y_diff in [-1,0,1]:
+						if x_diff != 0 or y_diff != 0:
+							to_visit.append((x1+x_diff,y1+y_diff))
 
 def find_component_list(im, visited, x, y):
 	component = find_component(im, visited, x, y)
@@ -88,6 +116,17 @@ def find_components(im):
 			for c in find_component_list(im, visited, x, y):
 				components.append(c)
 	return components
+
+def find_outside(im):
+	w, h = im.size
+	visited = set()
+	for x in range(w):
+		visit_white(im, visited, x, 0)
+		visit_white(im, visited, x, h-1)
+	for y in range(h):
+		visit_white(im, visited, 0, y)
+		visit_white(im, visited, w-1, y)
+	return make_image(w, h, visited), visited
 
 class Segment:
 	def __init__(self, im, x, y):
@@ -151,6 +190,7 @@ class Segment:
 			i = i+1
 		return segments_sorted
 
+	@staticmethod
 	def overlap(segment1, segment2):
 		w1, h1 = segment1.im.size
 		w2, h2 = segment2.im.size
@@ -176,11 +216,14 @@ def image_to_segments(im):
 
 # testing
 if __name__ == '__main__':
-	im = normalize_image(Image.open('tests/test3.png'))
-	w, h = im.size
+	im = normalize_image(Image.open('tests/test14.png'))
+	# w, h = im.size
 	segments = image_to_segments(im)
-	print(len(segments), 'segments')
-	recreated = white_image(w, h)
-	i = 0
-	recreated.paste(segments[i].im, (segments[i].x, segments[i].y))
-	recreated.save('tests/test.png')
+	# print(len(segments), 'segments')
+	# recreated = white_image(w, h)
+	# i = 0
+	# recreated.paste(segments[i].im, (segments[i].x, segments[i].y))
+	# recreated.save('tests/test.png')
+	# segment = segments[0]
+	# segment.im.save("test.png")
+
