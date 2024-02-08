@@ -221,6 +221,24 @@ def rejoin_hor(groups):
 			i = i+1
 	return groups
 
+def rejoin_ver(groups):
+	i = 0
+	while i+1 < len(groups):
+		group = groups[i]
+		group_next = groups[i+1]
+		min_x, _, max_x, _ = ClassifiedSegment.bounds(group)
+		min_x_next, _, max_x_next, _ = ClassifiedSegment.bounds(group_next)
+		mid = (min_x + max_x) / 2
+		mid_next = (min_x_next + max_x_next) / 2
+		if max_x < mid_next and max_x > min_x_next and len(group_next) > 1 or \
+				min_x > mid_next and min_x < max_x_next and len(group_next) > 1 or \
+				max_x_next < mid and max_x_next > min_x and len(group) > 1 or \
+				min_x_next > mid and min_x_next < max_x and len(group) > 1:
+			groups[i] = groups[i] + groups.pop(i+1)
+		else:
+			i = i+1
+	return groups
+
 def partition_hor(signs):
 	signs = sorted(signs, key=lambda s: s.segment.x)
 	groups = []
@@ -271,7 +289,7 @@ def partition_ver(signs):
 			if y_max == y_max_old:
 				break
 		groups.append(group)
-	return groups
+	return rejoin_ver(groups)
 
 def relative_corner_location(core, insert):
 	x_mid = insert.x + insert.im.size[0] / 2
