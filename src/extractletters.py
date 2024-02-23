@@ -7,7 +7,6 @@ if __name__ == '__main__':
 	root = tk.Tk()
 	app = LetterExtractor(root)
 	if len(sys.argv) >= 2:
-		page = sys.argv[1]
-		filename = page + '.png'
+		filename = sys.argv[1]
 		app.set_image(filename)
 	app.mainloop()

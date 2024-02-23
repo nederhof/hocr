@@ -14,6 +14,7 @@ default_sign_font_dirs = ['gardiner', 'newgardiner']
 default_letter_font_dirs = ['letters']
 default_sign_model_dir = 'signmodel'
 default_letter_model_dir = 'lettermodel'
+default_sign_letter_model_dir = 'signlettermodel'
 default_pca_dim = 30
 
 def ascender(ch):
@@ -236,8 +237,8 @@ def get_prototypes_signs(prototype_dirs):
 		for filename in prototype_files:
 			path = os.path.join(prototype_dir, filename)
 			base, ext = os.path.splitext(filename)
-			codepoint = re.sub('-[0-9]+', '', base)
 			if ext == '.png':
+				codepoint = re.sub('-[0-9]+', '', base)
 				ch = chr(int(codepoint))
 				name = names[ch]
 				if name in numerals or name in repeated_single:
@@ -273,6 +274,14 @@ def get_prototypes_letters(prototype_dirs):
 				aspects.append(aspect)
 				heights.append(height)
 	return chars, styles, vecs, aspects, heights
+
+def get_prototypes_signs_letters(sign_dirs, letter_dirs):
+	_, _, sign_vecs, _, sign_aspects, _ = get_prototypes_signs(sign_dirs)
+	_, _, letter_vecs, letter_aspects, _ = get_prototypes_letters(letter_dirs)
+	issign = [True] * len(sign_vecs) + [False] * len(letter_vecs)
+	vecs = sign_vecs + letter_vecs
+	aspects = sign_aspects + letter_aspects
+	return issign, vecs, aspects
 
 def train_signs(prototype_dirs, model_dir, pca_dim):
 	chars, partss, vecs_core, vecs_full, aspects_core, aspects_full = \
@@ -331,6 +340,25 @@ def train_letters(prototype_dirs, model_dir, pca_dim):
 	with open(os.path.join(model_dir, 'pca.pickle'), 'wb') as handle:
 		pickle.dump(pca, handle)
 
+def train_signs_letters(sign_dirs, letter_dirs, model_dir, pca_dim):
+	issign, vecs, aspects = get_prototypes_signs_letters(sign_dirs, letter_dirs)
+	scaler = StandardScaler()
+	scaled = scaler.fit_transform(vecs)
+	pca = PCA(n_components=pca_dim)
+	embeddings = pca.fit_transform(scaled)
+	if not os.path.exists(model_dir):
+		os.mkdir(model_dir)
+	with open(os.path.join(model_dir, 'issign.pickle'), 'wb') as handle:
+		pickle.dump(issign, handle)
+	with open(os.path.join(model_dir, 'embeddings.pickle'), 'wb') as handle:
+		pickle.dump(embeddings, handle)
+	with open(os.path.join(model_dir, 'aspects.pickle'), 'wb') as handle:
+		pickle.dump(aspects, handle)
+	with open(os.path.join(model_dir, 'scaler.pickle'), 'wb') as handle:
+		pickle.dump(scaler, handle)
+	with open(os.path.join(model_dir, 'pca.pickle'), 'wb') as handle:
+		pickle.dump(pca, handle)
+
 def train_signs_default():
 	font_dirs = default_sign_font_dirs
 	model_dir = default_sign_model_dir
@@ -343,6 +371,14 @@ def train_letters_default():
 	pca_dim = default_pca_dim
 	train_letters(font_dirs, model_dir, pca_dim)
 
+def train_sign_recognition_default():
+	sign_dirs = default_sign_font_dirs
+	letter_dirs = default_letter_font_dirs
+	model_dir = default_sign_letter_model_dir
+	pca_dim = default_pca_dim
+	train_signs_letters(sign_dirs, letter_dirs, model_dir, pca_dim)
+
 if __name__ == '__main__':
 	train_signs_default()
 	train_letters_default()
+	train_sign_recognition_default()
