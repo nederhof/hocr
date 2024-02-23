@@ -10,9 +10,170 @@ from sklearn.decomposition import PCA
 from tables import get_unicode_to_name, numerals, composite, repeated_single
 from imageprocessing import normalize_image, area, image_to_vec, image_to_segments
 
-default_font_dirs = ['gardiner', 'newgardiner']
-default_model_dir = 'model'
+default_sign_font_dirs = ['gardiner', 'newgardiner']
+default_letter_font_dirs = ['letters']
+default_sign_model_dir = 'signmodel'
+default_letter_model_dir = 'lettermodel'
 default_pca_dim = 30
+
+def ascender(ch):
+	return ch in ['b', 'd', 'f', 'fi', 'h', 'i', 'k', 'l', 'th', '6', '8', ]
+
+def small_ascender(ch):
+	return ch in ['t', 'ts']
+
+def descender(ch):
+	return ch in ['g', 'gu', 'p', 'q', 'y', '3', '4', '5', '7', '9']
+
+def ascender_descender(ch):
+	return ch in ['j', 'J']
+
+def accented_lower(ch):
+	return ch in ['à', 'è', 'ì', 'ò', 'ù', \
+		'á', 'é', 'í', 'ó', 'ú', \
+		'â', 'ê', 'î', 'ô', 'û', \
+		'ã', 'ñ', 'õ', \
+		'ë', 'ï', 'ö', 'ü', \
+		'ā', 'ē', 'ī', 'ō', 'ū', \
+		'ı͗', 'š']
+
+def accented_lower_descender(ch):
+	return ch in ['ý', 'ÿ']
+
+def below_accented_lower(ch):
+	return ch in ['ç', 'ḥ', 'ḫ', 'ẖ', 'ḳ', 'ṯ', 'ḏ']
+
+def accented_upper(ch):
+	return ch in ['À', 'È', 'Ì', 'Ò', 'Ù', \
+		'Á', 'É', 'Í', 'Ó', 'Ú', 'Ý', \
+		'Â', 'Ê', 'Î', 'Ô', 'Û', \
+		'Ã', 'Ñ', 'Õ', \
+		'Ä', 'Ë', 'Ï', 'Ö', 'Ü', 'Ÿ', \
+		'Ā', 'Ē', 'Ī', 'Ō', 'Ū', \
+		'Č', 'Ꞽ', 'Š']
+
+def below_accented_upper(ch):
+	return ch in ['Ç', 'Q', 'Ḥ', 'Ḫ', 'H̱', 'Ḳ', 'Ṯ', 'Ḏ']
+
+def relative_height(ch, style):
+	match ch:
+		case '.':
+			return 0.3
+		case ',':
+			return 0.6
+		case ';':
+			return 1.3
+		case '-':
+			return 0.2
+		case '[':
+			return 2
+		case ']':
+			return 2
+		case '(':
+			return 2
+		case ')':
+			return 2
+		case '&':
+			return 1.5
+		case '*':
+			return 0.9
+		case 'ꜥ':
+			return 0.9
+		case 'Ꜥ':
+			return 0.9
+	match style:
+		case 'plain':
+			if ascender(ch):
+				return 1.5
+			elif small_ascender(ch):
+				return 1.3
+			elif descender(ch):
+				return 1.5
+			elif ascender_descender(ch):
+				return 2
+			elif accented_lower(ch):
+				return 1.5
+			elif accented_lower_descender(ch):
+				return 2
+			elif below_accented_lower(ch):
+				return 2
+			elif accented_upper(ch):
+				return 2
+			elif below_accented_upper(ch):
+				return 2
+			elif ch.isupper():
+				return 1.7
+			else:
+				return 1
+		case 'italic':
+			if ascender(ch):
+				return 1.5
+			elif small_ascender(ch):
+				return 1.3
+			elif descender(ch):
+				return 1.5
+			elif ascender_descender(ch):
+				return 2
+			elif accented_lower(ch):
+				return 1.5
+			elif accented_lower_descender(ch):
+				return 2
+			elif below_accented_lower(ch):
+				return 2
+			elif accented_upper(ch):
+				return 2
+			elif below_accented_upper(ch):
+				return 2
+			elif ch.isupper():
+				return 1.7
+			else:
+				return 1
+		case 'bold':
+			if ascender(ch):
+				return 1.5
+			elif small_ascender(ch):
+				return 1.3
+			elif descender(ch):
+				return 1.5
+			elif ascender_descender(ch):
+				return 1.8
+			elif accented_lower(ch):
+				return 1.3
+			elif accented_lower_descender(ch):
+				return 1.8
+			elif below_accented_lower(ch):
+				return 1.8
+			elif accented_upper(ch):
+				return 1.8
+			elif below_accented_upper(ch):
+				return 1.8
+			elif ch.isupper():
+				return 1.4
+			else:
+				return 1
+		case 'smallcaps':
+			if ascender(ch):
+				return 1.5
+			elif small_ascender(ch):
+				return 1.1
+			elif descender(ch):
+				return 1.1
+			elif ascender_descender(ch):
+				return 2
+			elif accented_lower(ch):
+				return 1.5
+			elif accented_lower_descender(ch):
+				return 2
+			elif below_accented_lower(ch):
+				return 1.7
+			elif accented_upper(ch):
+				return 2
+			elif below_accented_upper(ch):
+				return 2
+			elif ch.isupper():
+				return 1.6
+			else:
+				return 1
 
 def split(im):
 	segments = image_to_segments(im)
@@ -35,7 +196,7 @@ def split(im):
 	full = im if len(parts) > 0 else None
 	return parts, core.im, full
 
-def get_prototype(path, name):
+def get_prototype_sign(path, name):
 	im = normalize_image(Image.open(path))
 	if name in composite:
 		parts = []
@@ -54,7 +215,15 @@ def get_prototype(path, name):
 		aspect_full = None
 	return parts, vec_core, vec_full, aspect_core, aspect_full
 
-def get_prototypes(prototype_dirs):
+def get_prototype_letter(path, ch, style):
+	im = normalize_image(Image.open(path))
+	vec = image_to_vec(im)
+	w, h = im.size
+	aspect = w / h
+	height = relative_height(ch, style)
+	return vec, aspect, height
+
+def get_prototypes_signs(prototype_dirs):
 	names = get_unicode_to_name()
 	chars = []
 	partss = []
@@ -73,7 +242,7 @@ def get_prototypes(prototype_dirs):
 				name = names[ch]
 				if name in numerals or name in repeated_single:
 					continue
-				parts, vec_core, vec_full, aspect_core, aspect_full = get_prototype(path, name)
+				parts, vec_core, vec_full, aspect_core, aspect_full = get_prototype_sign(path, name)
 				chars.append(ch)
 				partss.append(parts)
 				vecs_core.append(vec_core)
@@ -82,9 +251,32 @@ def get_prototypes(prototype_dirs):
 				aspects_full.append(aspect_full)
 	return chars, partss, vecs_core, vecs_full, aspects_core, aspects_full
 
-def train(prototype_dirs, model_dir, pca_dim):
+def get_prototypes_letters(prototype_dirs):
+	chars = []
+	styles = []
+	vecs = []
+	aspects = []
+	heights = []
+	for prototype_dir in prototype_dirs:
+		prototype_files = os.listdir(prototype_dir)
+		for filename in prototype_files:
+			path = os.path.join(prototype_dir, filename)
+			base, ext = os.path.splitext(filename)
+			if ext == '.png':
+				filename = re.sub('-[0-9]+', '', base)
+				style, codepoints = filename.split(':')
+				ch = ''.join([chr(int(codepoint)) for codepoint in codepoints.split('+')])
+				vec, aspect, height = get_prototype_letter(path, ch, style)
+				chars.append(ch)
+				styles.append(style)
+				vecs.append(vec)
+				aspects.append(aspect)
+				heights.append(height)
+	return chars, styles, vecs, aspects, heights
+
+def train_signs(prototype_dirs, model_dir, pca_dim):
 	chars, partss, vecs_core, vecs_full, aspects_core, aspects_full = \
-			get_prototypes(prototype_dirs)
+			get_prototypes_signs(prototype_dirs)
 	scaler = StandardScaler()
 	scaled_core = scaler.fit_transform(vecs_core)
 	pca = PCA(n_components=pca_dim)
@@ -116,10 +308,41 @@ def train(prototype_dirs, model_dir, pca_dim):
 	with open(os.path.join(model_dir, 'pca.pickle'), 'wb') as handle:
 		pickle.dump(pca, handle)
 
-if __name__ == '__main__':
-	font_dirs = default_font_dirs
-	model_dir = default_model_dir
+def train_letters(prototype_dirs, model_dir, pca_dim):
+	chars, styles, vecs, aspects, heights = get_prototypes_letters(prototype_dirs)
+	scaler = StandardScaler()
+	scaled = scaler.fit_transform(vecs)
+	pca = PCA(n_components=pca_dim)
+	embeddings = pca.fit_transform(scaled)
+	if not os.path.exists(model_dir):
+		os.mkdir(model_dir)
+	with open(os.path.join(model_dir, 'chars.pickle'), 'wb') as handle:
+		pickle.dump(chars, handle)
+	with open(os.path.join(model_dir, 'styles.pickle'), 'wb') as handle:
+		pickle.dump(styles, handle)
+	with open(os.path.join(model_dir, 'embeddings.pickle'), 'wb') as handle:
+		pickle.dump(embeddings, handle)
+	with open(os.path.join(model_dir, 'aspects.pickle'), 'wb') as handle:
+		pickle.dump(aspects, handle)
+	with open(os.path.join(model_dir, 'heights.pickle'), 'wb') as handle:
+		pickle.dump(heights, handle)
+	with open(os.path.join(model_dir, 'scaler.pickle'), 'wb') as handle:
+		pickle.dump(scaler, handle)
+	with open(os.path.join(model_dir, 'pca.pickle'), 'wb') as handle:
+		pickle.dump(pca, handle)
+
+def train_signs_default():
+	font_dirs = default_sign_font_dirs
+	model_dir = default_sign_model_dir
 	pca_dim = default_pca_dim
-	if len(sys.argv) >= 2:
-		pca_dim = int(sys.argv[1])
-	train(font_dirs, model_dir, pca_dim)
+	train_signs(font_dirs, model_dir, pca_dim)
+
+def train_letters_default():
+	font_dirs = default_letter_font_dirs
+	model_dir = default_letter_model_dir
+	pca_dim = default_pca_dim
+	train_letters(font_dirs, model_dir, pca_dim)
+
+if __name__ == '__main__':
+	train_signs_default()
+	train_letters_default()

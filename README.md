@@ -8,6 +8,7 @@ Transcribe (OCR) image of hieroglyphic to Unicode
 cd src
 unzip gardiner.zip
 unzip newgardiner.zip
+unzip letters.zip
 python tables.py
 python train.py
 python transcribe.py

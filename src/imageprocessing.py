@@ -1,6 +1,7 @@
 from PIL import Image, ImageChops
 import numpy as np
 import math
+import sys
 import statistics
 
 binarize = False
@@ -45,6 +46,34 @@ def in_image(im, x, y):
 def is_white(im, x, y):
 	return in_image(im, x, y) and im.getpixel((x,y)) > BLACK_THRESHOLD
 
+def aspects_similar(aspect1, aspect2):
+	if aspect1 < 0.3 or 1/aspect1 < 0.3:
+		return abs(aspect1-aspect2) / aspect1 < 0.3
+	elif aspect1 < 0.5 or 1/aspect1 < 0.5:
+		return abs(aspect1-aspect2) / aspect1 < 0.2
+	else:
+		return abs(aspect1-aspect2) / aspect1 < 0.1
+
+def heights_similar(h1, h2):
+	return abs(h1 - h2) < 0.25
+
+def squared_dist(vals1, vals2):
+	return sum([(val1-val2)*(val1-val2) for (val1,val2) in zip(vals1,vals2)])
+
+def squared_dist_with_aspect(vals1, aspect1, vals2, aspect2):
+	if aspects_similar(aspect1, aspect2):
+		return squared_dist(vals1, vals2)
+	else:
+		return sys.float_info.max
+
+def squared_dist_with_aspect_height(vals1, aspect1, height1, vals2, aspect2, height2):
+	if aspects_similar(aspect1, aspect2):
+		dist = squared_dist(vals1, vals2)
+		penalty = 0 if heights_similar(height1, height2) else 800
+		return dist + penalty
+	else:
+		return sys.float_info.max
+
 def image_to_vec(im):
 	if block_prototype:
 		return image_to_vec_block(im)
@@ -72,60 +101,90 @@ def image_to_vec_center(im):
 	vec = np.asarray(block).flatten()
 	return vec
 
-def find_component(im, visited, x, y):
+def find_component(im, visited, x, y, threshold, strict=False):
 	component = []
 	w, h = im.size
 	to_visit = [(x,y)]
+	if strict:
+		neighbours = [(-1,0),(1,0),(0,-1),(0,1)]
+	else:
+		neighbours = [(x_diff, y_diff) \
+			for x_diff in [-1,0,1] for y_diff in [-1,0,1] if x_diff != 0 or y_diff != 0]
 	while len(to_visit) > 0:
 		(x1,y1) = to_visit.pop()
 		if in_image(im, x1, y1) and (x1,y1) not in visited:
 			p = im.getpixel((x1,y1))
-			if p <= BLACK_THRESHOLD:
+			if p <= threshold:
 				visited.add((x1,y1))
 				component.append((x1,y1,p))
-				for x_diff in [-1,0,1]:
-					for y_diff in [-1,0,1]:
-						if x_diff != 0 or y_diff != 0:
-							to_visit.append((x1+x_diff,y1+y_diff))
+				for x_diff, y_diff in neighbours:
+					to_visit.append((x1+x_diff,y1+y_diff))
 	return component
 
-def visit_white(im, visited, x, y):
+def expand_component(im, x_min, y_min, w, h, component, threshold):
+	to_visit = []
+	visited = set()
+	for x, y, _ in component:
+		# print(x, y, x_min, y_min)
+		if x == x_min:
+			to_visit.append((x-1,y))
+		if x == x_min + w - 1:
+			to_visit.append((x+1,y))
+		if y == y_min:
+			to_visit.append((x,y-1))
+		if y == y_min + h - 1:
+			to_visit.append((x,y+1))
+	for x_diff in range(w):
+		for y_diff in range(h):
+			visited.add((x_min + x_diff, y_min + y_diff))
+	neighbours = [(-1,0),(1,0),(0,-1),(0,1)]
+	while len(to_visit) > 0:
+		(x1,y1) = to_visit.pop()
+		if in_image(im, x1, y1) and (x1,y1) not in visited:
+			p = im.getpixel((x1,y1))
+			if p <= threshold:
+				visited.add((x1,y1))
+				component.append((x1,y1,p))
+				for x_diff, y_diff in neighbours:
+					to_visit.append((x1+x_diff,y1+y_diff))
+
+def visit_white(im, visited, x, y, threshold):
 	w, h = im.size
 	to_visit = [(x,y)]
 	while len(to_visit) > 0:
 		(x1,y1) = to_visit.pop()
 		if in_image(im, x1, y1) and (x1,y1) not in visited:
 			p = im.getpixel((x1,y1))
-			if p > BLACK_THRESHOLD:
+			if p > threshold:
 				visited.add((x1,y1))
 				for x_diff in [-1,0,1]:
 					for y_diff in [-1,0,1]:
 						if x_diff != 0 or y_diff != 0:
 							to_visit.append((x1+x_diff,y1+y_diff))
 
-def find_component_list(im, visited, x, y):
-	component = find_component(im, visited, x, y)
+def find_component_list(im, visited, x, y, threshold, strict=False):
+	component = find_component(im, visited, x, y, threshold, strict=strict)
 	return [component] if len(component) > 0 else []
 
-def find_components(im):
+def find_components(im, threshold, strict=False):
 	w, h = im.size
 	visited = set()
 	components = []
 	for x in range(w):
 		for y in range(h):
-			for c in find_component_list(im, visited, x, y):
+			for c in find_component_list(im, visited, x, y, threshold, strict=strict):
 				components.append(c)
 	return components
 
-def find_outside(im):
+def find_outside(im, threshold=BLACK_THRESHOLD):
 	w, h = im.size
 	visited = set()
 	for x in range(w):
-		visit_white(im, visited, x, 0)
-		visit_white(im, visited, x, h-1)
+		visit_white(im, visited, x, 0, threshold)
+		visit_white(im, visited, x, h-1, threshold)
 	for y in range(h):
-		visit_white(im, visited, 0, y)
-		visit_white(im, visited, w-1, y)
+		visit_white(im, visited, 0, y, threshold)
+		visit_white(im, visited, w-1, y, threshold)
 	return make_image(w, h, visited), visited
 
 class Segment:
@@ -139,6 +198,16 @@ class Segment:
 
 	def transpose(self, x, y):
 		return Segment(self.im, self.x + x, self.y + y)
+
+	def component(self, threshold):
+		w, h = self.im.size
+		comp = []
+		for x in range(w):
+			for y in range(h):
+				val = self.im.getpixel((x,y))
+				if val <= threshold:
+					comp.append((self.x + x, self.y + y, val))
+		return comp
 
 	@staticmethod
 	def merge(segment1, segment2):
@@ -190,6 +259,28 @@ class Segment:
 			i = i+1
 		return segments_sorted
 
+	def merge_with_stack(segments):
+		segments_sorted = sorted(segments, key=lambda s: s.x)
+		i = 0
+		while i < len(segments_sorted):
+			j = i+1
+			changed = True
+			while changed:
+				changed = False
+				while j < len(segments_sorted):
+					other = segments_sorted[j]
+					if other.x <= segments_sorted[i].x + segments_sorted[i].im.size[0] and \
+							(other.y + other.im.size[1] <= segments_sorted[i].y + 0.3 * segments_sorted[i].im.size[1] or \
+							segments_sorted[i].y + segments_sorted[i].im.size[1] <= other.y + 0.3 * other.im.size[1] or \
+							other.x + other.im.size[0] <= segments_sorted[i].x + segments_sorted[i].im.size[0]):
+						segments_sorted[i] = Segment.merge(segments_sorted[i], other)
+						segments_sorted.pop(j)
+						changed = True
+					else:
+						j = j+1
+			i = i+1
+		return segments_sorted
+
 	@staticmethod
 	def overlap(segment1, segment2):
 		w1, h1 = segment1.im.size
@@ -209,10 +300,17 @@ def component_to_segment(component):
 		im.putpixel((x-x_offset,y-y_offset), p)
 	return Segment(im, x_offset, y_offset)
 
-def image_to_segments(im):
-	components = find_components(im)
+def image_to_segments(im, threshold=BLACK_THRESHOLD, strict=False):
+	components = find_components(im, threshold, strict=strict)
 	segments = [component_to_segment(c) for c in components]
 	return segments
+
+def recreate_segment_from_page(page, x, y, segment, threshold=BLACK_THRESHOLD):
+	placed = segment.transpose(x, y)
+	w, h = placed.im.size
+	component = placed.component(threshold)
+	expand_component(page, placed.x, placed.y, w, h, component, threshold)
+	return component_to_segment(component)
 
 # testing
 if __name__ == '__main__':

@@ -5,10 +5,11 @@ import os
 import sys
 import heapq
 
-from imageprocessing import area, MIN_SEGMENT_AREA, image_to_vec, Segment, image_to_segments
+from imageprocessing import area, MIN_SEGMENT_AREA, image_to_vec, Segment, image_to_segments, \
+		aspects_similar, squared_dist, squared_dist_with_aspect
 from tables import get_insertions
 from controls import Horizontal, Vertical, Basic, Z1
-from train import default_model_dir
+from train import default_sign_model_dir
 
 name_to_insertions = get_insertions()
 
@@ -62,24 +63,7 @@ class ClassifiedSegment:
 			y_max = max(y_max, segment_i.y + segment_i.im.size[1])
 		return x_min, y_min, x_max, y_max
 
-def aspects_similar(aspect1, aspect2):
-	if aspect1 < 0.3 or 1/aspect1 < 0.3:
-		return abs(aspect1-aspect2) / aspect1 < 0.3
-	elif aspect1 < 0.5 or 1/aspect1 < 0.5:
-		return abs(aspect1-aspect2) / aspect1 < 0.2
-	else:
-		return abs(aspect1-aspect2) / aspect1 < 0.1
-
-def squared_dist(vals1, vals2):
-	return sum([(val1-val2)*(val1-val2) for (val1,val2) in zip(vals1,vals2)])
-
-def conditional_squared_dist(vals1, aspect1, vals2, aspect2):
-	if aspects_similar(aspect1, aspect2):
-		return squared_dist(vals1, vals2)
-	else:
-		return sys.float_info.max
-
-def conditional_squared_dist_all(vals1, aspect1, vals_core, vals_full, aspect2):
+def squared_dist_with_aspect_all(vals1, aspect1, vals_core, vals_full, aspect2):
 	if aspects_similar(aspect1, aspect2):
 		if vals_full is not None:
 			return squared_dist(vals1, vals_full)
@@ -89,13 +73,13 @@ def conditional_squared_dist_all(vals1, aspect1, vals_core, vals_full, aspect2):
 		return sys.float_info.max
 
 def find_closest_core(embedding, aspect, k, fontinfo):
-	dists = [conditional_squared_dist(embedding, aspect, e, a) for (e, a) \
+	dists = [squared_dist_with_aspect(embedding, aspect, e, a) for (e, a) \
 					in zip(fontinfo.embeddings_core, fontinfo.aspects_core)]
 	indexes = heapq.nlargest(k, range(len(dists)), key=lambda i: -dists[i])
 	return indexes
 
 def find_closest_full(embedding, aspect, k, fontinfo):
-	dists = [conditional_squared_dist_all(embedding, aspect, ec, ef, a) for (ec, ef, a) \
+	dists = [squared_dist_with_aspect_all(embedding, aspect, ec, ef, a) for (ec, ef, a) \
 				in zip(fontinfo.embeddings_core, fontinfo.embeddings_full, fontinfo.aspects_core)]
 	indexes = heapq.nlargest(k, range(len(dists)), key=lambda i: -dists[i])
 	return indexes
@@ -376,7 +360,7 @@ if __name__ == '__main__':
 		'tests/test6.png', 'tests/test7.png', 'tests/test8.png', 'tests/test9.png', 'tests/test10.png',
 		'tests/test11.png', 'tests/test12.png', 'tests/test13.png', 'tests/test14.png', 'tests/test15.png']
 	direction = 'h'
-	model_dir = default_model_dir
+	model_dir = default_sign_model_dir
 	if len(sys.argv) >= 2:
 		images = [sys.argv[1]]
 	if len(sys.argv) >= 3:

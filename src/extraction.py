@@ -6,16 +6,9 @@ from PIL import Image, ImageTk
 
 from imageprocessing import area, MIN_SEGMENT_AREA, transparency_to_white, \
 		image_to_segments, Segment, white_image, normalize_image
-from storing import Storer
-
-def extract_signs(im):
-	segments = image_to_segments(im) 
-	merged = Segment.merge_with_overlap(segments)
-	return [segment for segment in merged if area(segment.im) >= MIN_SEGMENT_AREA]
-
-def extract_sign(im):
-	segments = image_to_segments(im) 
-	return Segment.merge_big(segments, size=MIN_SEGMENT_AREA)
+from storing import SignStorer, LetterStorer
+from transcribe import FontInfo as FontInfoSigns
+from ocr import FontInfo as FontInfoLetters, median_height
 
 def segment_rect_overlap(segment, x_min, x_max, y_min, y_max):
 	w, h = segment.im.size
@@ -28,7 +21,12 @@ MIN_PIXELS_IN_CANVAS = 10
 ARROW_STEP = 0.7
 DEFAULT_GEOMETRY = '800x800'
 
+BLACK_THRESHOLD = 110
+
 remove_transparency = True
+
+sign_model_dir = 'signmodel'
+letter_model_dir = 'lettermodel'
 
 class ExtractorMenu(tk.Menu):
 	def __init__(self, master, shortcuts, functions):
@@ -148,14 +146,16 @@ class Extractor(tk.Frame):
 		self.image = Image.open(path)
 		if remove_transparency:
 			self.image = transparency_to_white(self.image)
+		self.image = self.image.convert('L')
 		self.master.title(path)
 		self.w_image, self.h_image = self.image.size
 		self.segments = []
 		self.adjust_zoom()
+		self.adjust_fontinfo()
 
 	def open_image(self):
 		path = askopenfilename(title='Select an image')
-		if path != '': 
+		if path != '' and len(path) > 0: 
 			self.set_image(path)
 
 	def resize(self):
@@ -359,7 +359,7 @@ class Extractor(tk.Frame):
 		if self.image is None:
 			return
 		x, y, im = self.subimage(p1, p2)
-		segments = extract_signs(im)
+		segments = self.extract_signs(im)
 		for segment in segments:
 			self.segments.append(segment.transpose(x, y))
 		self.delayed_redraw()
@@ -368,7 +368,8 @@ class Extractor(tk.Frame):
 		if self.image is None:
 			return
 		x, y, im = self.subimage(p1, p2)
-		segment = extract_sign(im)
+		segments = image_to_segments(im, threshold=self.threshold)
+		segment = Segment.merge_big(segments, size=MIN_SEGMENT_AREA)
 		if segment is not None:
 			self.segments.append(segment.transpose(x, y))
 		self.delayed_redraw()
@@ -400,14 +401,34 @@ class Extractor(tk.Frame):
 			segment = self.segments.pop(0)
 			self.delayed_redraw()
 			sub = tk.Toplevel()
-			Storer(sub, segment.im, self.classify)
+			self.storer(sub, segment.im, self.fontinfo, self.classify)
 
-if __name__ == '__main__':
-	if len(sys.argv) < 2:
-		exit(0)
-	page = sys.argv[1]
-	filename = page + '.png'
-	root = tk.Tk()
-	app = Extractor(root)
-	app.set_image(filename)
-	app.mainloop()
+class SignExtractor(Extractor):
+	def __init__(self, root):
+		self.storer = SignStorer
+		self.fontinfo = FontInfoSigns(sign_model_dir)
+		self.threshold = 128
+		Extractor.__init__(self, root)
+
+	def extract_signs(self, im):
+		segments = image_to_segments(im, self.threshold) 
+		merged = Segment.merge_with_overlap(segments)
+		return [segment for segment in merged if area(segment.im) >= MIN_SEGMENT_AREA]
+
+	def adjust_fontinfo(self):
+		None
+
+class LetterExtractor(Extractor):
+	def __init__(self, root):
+		self.storer = LetterStorer
+		self.fontinfo = FontInfoLetters(letter_model_dir)
+		self.threshold = BLACK_THRESHOLD
+		Extractor.__init__(self, root)
+
+	def extract_signs(self, im):
+		segments = image_to_segments(im, self.threshold) 
+		merged = Segment.merge_with_stack(segments)
+		return [segment for segment in merged if area(segment.im) >= MIN_SEGMENT_AREA]
+
+	def adjust_fontinfo(self):
+		self.fontinfo.unit_height = median_height(self.image, threshold=BLACK_THRESHOLD)
