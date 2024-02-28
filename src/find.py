@@ -6,8 +6,9 @@ from statistics import median
 from PIL import Image, ImageDraw
 
 from train import default_sign_letter_model_dir
-from imageprocessing import area, MIN_SEGMENT_AREA, image_to_vec, Segment, image_to_segments, \
-		squared_dist_with_aspect
+from imageprocessing import area, image_to_vec, squared_dist_with_aspect
+from segments import Segment, image_to_segments, MIN_SEGMENT_AREA
+from rectangleselection import open_selector
 
 BLACK_THRESHOLD = 110
 
@@ -41,8 +42,11 @@ def classify_image(im, fontinfo, pruned=False):
 	embedding = fontinfo.image_to_embedding(im)
 	w, h = im.size
 	aspect = w / h
+	rel_width = w / fontinfo.unit_height
 	rel_height = h / fontinfo.unit_height
-	if rel_height > 3:
+	if rel_width < 0.5 or rel_height < 0.5:
+		return False
+	elif rel_height > 3:
 		return False
 	elif pruned and rel_height <= 1.7:
 		return False
@@ -71,8 +75,7 @@ def close_to_any(segment1, segments, unit):
 	return False
 
 def find_signs(im, model_dir):
-	segments = image_to_segments(im, threshold=BLACK_THRESHOLD, strict=True)
-	segments = [segment for segment in segments if area(segment.im) >= MIN_SEGMENT_AREA]
+	segments = image_to_segments(im, BLACK_THRESHOLD, strict=True, min_area=MIN_SEGMENT_AREA)
 	segments = sorted(segments, key=lambda s: s.y)
 	heights = [segment.im.size[1] for segment in segments]
 	unit_height = median(heights)
@@ -111,26 +114,33 @@ def find_signs(im, model_dir):
 			i += 1
 	rects = []
 	for segment in signs:
-		x0 = segment.x
-		y0 = segment.y
+		x = segment.x
+		y = segment.y
 		w, h = segment.im.size
-		x1 = x0 + w
-		y1 = y0 + h
-		rects.append((x0, y0, x1, y1))
+		rects.append((x, y, w, h))
 	return rects
 
 def add_rects_to_image(im, rects):
 	result = im.convert('RGB')
 	drawing = ImageDraw.Draw(result)
-	for x0, y0, x1, y1 in rects:
-		drawing.rectangle([(x0, y0), (x1, y1)], outline=(255,0,0))
+	for x, y, w, h in rects:
+		drawing.rectangle([(x, y), (x+w, y+h)], outline=(255,0,0))
 	return result
 
+def manual_adjust(imagefile, rects):
+	segments = [Segment.from_rectangle(x, y, w, h) for x, y, w, h in rects]
+	open_selector(imagefile, segments, next_stage)
+
+def next_stage(segments):
+	for segment in segments:
+		print(segment)
+
 if __name__ == '__main__':
-	imagefile = '/home/mjn/work/topbib/topbib/ocr/vol1/10.png'
+	imagefile = '/home/mjn/work/topbib/topbib/ocr/vol1/1.png'
 	if len(sys.argv) >= 2:
 		imagefile = sys.argv[1]
 	im = Image.open(imagefile)
 	rects = find_signs(im, default_sign_letter_model_dir)
-	result = add_rects_to_image(im, rects)
-	result.save("test.png")
+	rects = manual_adjust(imagefile, rects)
+	# result = add_rects_to_image(im, rects)
+	# result.save("test.png")

@@ -8,7 +8,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
 from tables import get_unicode_to_name, numerals, composite, repeated_single
-from imageprocessing import normalize_image, area, image_to_vec, image_to_segments
+from imageprocessing import BLACK_THRESHOLD, normalize_image, area, image_to_vec
+from segments import image_to_segments
 
 default_sign_font_dirs = ['gardiner', 'newgardiner']
 default_letter_font_dirs = ['letters']
@@ -177,7 +178,7 @@ def relative_height(ch, style):
 				return 1
 
 def split(im):
-	segments = image_to_segments(im)
+	segments = image_to_segments(im, BLACK_THRESHOLD)
 	i_core = max(range(len(segments)), key=lambda i: area(segments[i].im))
 	core = segments[i_core]
 	w_core, h_core = core.im.size

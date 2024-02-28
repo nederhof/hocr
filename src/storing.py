@@ -173,6 +173,7 @@ class LetterStorer(Storer):
 		filename = self.style + ':' + '+'.join([str(ord(ch)) for ch in self.code])
 		return os.path.join(target_letter_dir, filename + suffix + '.png')
 
+# For testing
 if __name__ == '__main__':
 	root = tk.Tk()
 	im = Image.open('tests/test4.png')

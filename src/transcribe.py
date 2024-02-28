@@ -5,8 +5,9 @@ import os
 import sys
 import heapq
 
-from imageprocessing import area, MIN_SEGMENT_AREA, image_to_vec, Segment, image_to_segments, \
+from imageprocessing import BLACK_THRESHOLD, area, image_to_vec, \
 		aspects_similar, squared_dist, squared_dist_with_aspect
+from segments import MIN_SEGMENT_AREA, Segment, ClassifiedSegment, image_to_segments, segments_to_rect
 from tables import get_insertions
 from controls import Horizontal, Vertical, Basic, Z1
 from train import default_sign_model_dir
@@ -41,27 +42,27 @@ class FontInfo:
 		embedding = self.pca.transform([scaled])[0]
 		return embedding
 
-class ClassifiedSegment:
-	def __init__(self, segment, ch):
-		self.segment = segment
-		self.ch = ch
-
-	@staticmethod
-	def bounds(segments):
-		if len(segments) == 0:
-			return None
-		segment = segments[0].segment
-		x_min = segment.x
-		y_min = segment.y
-		x_max = segment.x + segment.im.size[0]
-		y_max = segment.y + segment.im.size[1]
-		for i in range(1, len(segments)):
-			segment_i = segments[i].segment
-			x_min = min(x_min, segment_i.x)
-			y_min = min(y_min, segment_i.y)
-			x_max = max(x_max, segment_i.x + segment_i.im.size[0])
-			y_max = max(y_max, segment_i.y + segment_i.im.size[1])
-		return x_min, y_min, x_max, y_max
+# class ClassifiedSegment:
+# 	def __init__(self, segment, ch):
+# 		self.segment = segment
+# 		self.ch = ch
+# 
+# 	@staticmethod
+# 	def bounds(segments):
+# 		if len(segments) == 0:
+# 			return None
+# 		segment = segments[0].segment
+# 		x_min = segment.x
+# 		y_min = segment.y
+# 		x_max = segment.x + segment.im.size[0]
+# 		y_max = segment.y + segment.im.size[1]
+# 		for i in range(1, len(segments)):
+# 			segment_i = segments[i].segment
+# 			x_min = min(x_min, segment_i.x)
+# 			y_min = min(y_min, segment_i.y)
+# 			x_max = max(x_max, segment_i.x + segment_i.im.size[0])
+# 			y_max = max(y_max, segment_i.y + segment_i.im.size[1])
+# 		return x_min, y_min, x_max, y_max
 
 def squared_dist_with_aspect_all(vals1, aspect1, vals_core, vals_full, aspect2):
 	if aspects_similar(aspect1, aspect2):
@@ -100,7 +101,7 @@ def classify_segments_core(segments, fontinfo):
 	classifieds = []
 	for segment in segments:
 		ch_indexes = classify_image_core(segment.im, BEAM_WIDTH, fontinfo)
-		classifieds.append(ClassifiedSegment(segment, ch_indexes))
+		classifieds.append(ClassifiedSegment(segment.im, segment.x, segment.y, ch_indexes))
 	return classifieds
 
 def relative_location(core, segment):
@@ -127,10 +128,10 @@ def find_best_with_parts(classifieds_list, i, segment, candidate, fontinfo):
 		indices = []
 		for j in range(i+1, len(classifieds_list)):
 			other = classifieds_list[j]
-			segment_location = relative_location(segment, other.segment)
+			segment_location = relative_location(segment, other)
 			for part_location in parts:
 				if similar_location(segment_location, part_location):
-					merged = Segment.merge(merged, other.segment)
+					merged = Segment.merge(merged, other)
 					indices.append(j)
 					break
 		embedding = fontinfo.image_to_embedding(merged.im)
@@ -149,9 +150,8 @@ def find_best_chars(classifieds_list, fontinfo):
 		best_merged = None
 		best_ch = None
 		best_indices = []
-		classified_list = classifieds_list[i]
-		segment = classified_list.segment
-		candidates = classified_list.ch
+		segment = classifieds_list[i]
+		candidates = segment.ch
 		for candidate in candidates:
 			dist, merged, indices = \
 					find_best_with_parts(classifieds_list, i, segment, candidate, fontinfo)
@@ -160,7 +160,7 @@ def find_best_chars(classifieds_list, fontinfo):
 				best_merged = merged
 				best_ch = fontinfo.chars[candidate]
 				best_indices = indices
-		classifieds.append(ClassifiedSegment(best_merged, best_ch))
+		classifieds.append(ClassifiedSegment(best_merged.im, best_merged.x, best_merged.y, best_ch))
 		for index in reversed(best_indices):
 			classifieds_list.pop(index)
 		i = i+1
@@ -170,17 +170,15 @@ def find_best_chars(classifieds_list, fontinfo):
 # If sign tall (aspect ratio < 0.3) and narrower than 1/9 of widest sign and lower than
 # 1/3 of tallest sign, then it probably is Z1.
 def correct_Z1(sign, widest, tallest):
-	w, h = sign.segment.im.size
-	ratio = w / h
-	if w < widest / 9 and h < tallest / 3 and ratio < 0.3:
+	ratio = sign.w / sign.h
+	if sign.w < widest / 9 and sign.h < tallest / 3 and ratio < 0.3:
 		sign.ch = Z1
 
 def image_to_signs(im, fontinfo):
-	segments = image_to_segments(im)
-	segments = [segment for segment in segments if area(segment.im) >= MIN_SEGMENT_AREA]
-	widest = max([segment.im.size[0] for segment in segments])
-	tallest = max([segment.im.size[1] for segment in segments])
-	segments = sorted(segments, key=lambda s: -area(s.im))
+	segments = image_to_segments(im, BLACK_THRESHOLD, min_area=MIN_SEGMENT_AREA)
+	widest = max([segment.w for segment in segments])
+	tallest = max([segment.h for segment in segments])
+	segments = sorted(segments, key=lambda s: -s.area())
 	classifieds_list = classify_segments_core(segments, fontinfo)
 	classifieds = find_best_chars(classifieds_list, fontinfo)
 	for sign in classifieds:
@@ -192,14 +190,14 @@ def rejoin_hor(groups):
 	while i+1 < len(groups):
 		group = groups[i]
 		group_next = groups[i+1]
-		_, min_y, _, max_y = ClassifiedSegment.bounds(group)
-		_, min_y_next, _, max_y_next = ClassifiedSegment.bounds(group_next)
-		mid = (min_y + max_y) / 2
-		mid_next = (min_y_next + max_y_next) / 2
-		if max_y < mid_next and max_y > min_y_next and len(group_next) > 1 or \
-				min_y > mid_next and min_y < max_y_next and len(group_next) > 1 or \
-				max_y_next < mid and max_y_next > min_y and len(group) > 1 or \
-				min_y_next > mid and min_y_next < max_y and len(group) > 1:
+		_, y, _, h = segments_to_rect(group)
+		_, y_next, _, h_next = segments_to_rect(group_next)
+		mid = y + h/2
+		mid_next = y_next + h_next/2
+		if y + h < mid_next and y_next < y + h and len(group_next) > 1 or \
+				mid_next < y and y < y_next + h_next and len(group_next) > 1 or \
+				y_next + h_next < mid and y < y_next + h_next and len(group) > 1 or \
+				mid < y_next and y_next < y + h and len(group) > 1:
 			groups[i] = groups[i] + groups.pop(i+1)
 		else:
 			i = i+1
@@ -210,37 +208,37 @@ def rejoin_ver(groups):
 	while i+1 < len(groups):
 		group = groups[i]
 		group_next = groups[i+1]
-		min_x, _, max_x, _ = ClassifiedSegment.bounds(group)
-		min_x_next, _, max_x_next, _ = ClassifiedSegment.bounds(group_next)
-		mid = (min_x + max_x) / 2
-		mid_next = (min_x_next + max_x_next) / 2
-		if max_x < mid_next and max_x > min_x_next and len(group_next) > 1 or \
-				min_x > mid_next and min_x < max_x_next and len(group_next) > 1 or \
-				max_x_next < mid and max_x_next > min_x and len(group) > 1 or \
-				min_x_next > mid and min_x_next < max_x and len(group) > 1:
+		x, _, w, _ = segments_to_rect(group)
+		x_next, _, w_next, _ = segments_to_rect(group_next)
+		mid = x + w/2
+		mid_next = x_next + w_next/2
+		if x + w < mid_next and x_next < x + w and len(group_next) > 1 or \
+				mid_next < x and x < x_next + w_next and len(group_next) > 1 or \
+				x_next + w_next < mid and x < x_next + w_next and len(group) > 1 or \
+				mid < x_next and x_next < x + w and len(group) > 1:
 			groups[i] = groups[i] + groups.pop(i+1)
 		else:
 			i = i+1
 	return groups
 
 def partition_hor(signs):
-	signs = sorted(signs, key=lambda s: s.segment.x)
+	signs = sorted(signs, key=lambda s: s.x)
 	groups = []
 	while len(signs) > 0:
 		sign = signs.pop(0)
 		group = [sign]
-		x_min = sign.segment.x
-		x_max = sign.segment.x + sign.segment.im.size[0]
+		x_min = sign.x
+		x_max = sign.x + sign.w
 		while len(signs) > 0:
 			x_max_old = x_max
 			i = 0
 			while i < len(signs):
 				sign = signs[i]
-				sign_w = sign.segment.im.size[0]
+				sign_w = sign.w
 				min_overlap = min(x_max-x_min, sign_w)/OVERLAP_RATIO
-				if sign.segment.x <= x_max - min_overlap:
+				if sign.x <= x_max - min_overlap:
 					group.append(sign)
-					x_max = max(x_max, sign.segment.x + sign_w)
+					x_max = max(x_max, sign.x + sign_w)
 					signs.pop(i)
 				else:
 					i = i+1
@@ -250,23 +248,23 @@ def partition_hor(signs):
 	return rejoin_hor(groups)
 
 def partition_ver(signs):
-	signs = sorted(signs, key=lambda s: s.segment.y)
+	signs = sorted(signs, key=lambda s: s.y)
 	groups = []
 	while len(signs) > 0:
 		sign = signs.pop(0)
 		group = [sign]
-		y_min = sign.segment.y
-		y_max = sign.segment.y + sign.segment.im.size[1]
+		y_min = sign.y
+		y_max = sign.y + sign.h
 		while len(signs) > 0:
 			y_max_old = y_max
 			i = 0
 			while i < len(signs):
 				sign = signs[i]
-				sign_h = sign.segment.im.size[1]
+				sign_h = sign.h
 				min_overlap = min(y_max-y_min, sign_h)/OVERLAP_RATIO
-				if sign.segment.y <= y_max - min_overlap:
+				if sign.y <= y_max - min_overlap:
 					group.append(sign)
-					y_max = max(y_max, sign.segment.y + sign_h)
+					y_max = max(y_max, sign.y + sign_h)
 					signs.pop(i)
 				else:
 					i = i+1
@@ -276,10 +274,10 @@ def partition_ver(signs):
 	return rejoin_ver(groups)
 
 def relative_corner_location(core, insert):
-	x_mid = insert.x + insert.im.size[0] / 2
-	y_mid = insert.y + insert.im.size[1] / 2
-	x = ( x_mid - core.x ) / core.im.size[0]
-	y = ( y_mid - core.y ) / core.im.size[1]
+	x_mid = insert.x + insert.w / 2
+	y_mid = insert.y + insert.h / 2
+	x = ( x_mid - core.x ) / core.w
+	y = ( y_mid - core.y ) / core.h
 	return x, y
 
 def distance_loc(loc1, loc2):
@@ -287,17 +285,17 @@ def distance_loc(loc1, loc2):
 
 def corner_control(core, sign):
 	insertions = name_to_insertions[core.ch]
-	loc = relative_corner_location(core.segment, sign.segment)
+	loc = relative_corner_location(core, sign)
 	best_corner = max(insertions.keys(), key=lambda c: -distance_loc(insertions[c], loc))
 	return best_corner
 
 def basic_to_structure(group):
-	group = sorted(group, key=lambda s: -area(s.segment.im))
+	group = sorted(group, key=lambda s: -s.area())
 	core = group[0]
 	basic = Basic(core.ch)
 	corners = defaultdict(list)
 	for sign in group[1:]:
-		if area(sign.segment.im) >= area(core.segment.im) / 100 and \
+		if sign.area() >= core.area() / 100 and \
 				core.ch in name_to_insertions:
 			corner = corner_control(core, sign)
 			corners[corner].append(sign)

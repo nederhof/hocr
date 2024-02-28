@@ -1,15 +1,16 @@
-from PIL import Image
-from collections import defaultdict
-from statistics import median
 import pickle
 import os
 import sys
 import heapq
 import json
+from PIL import Image
+from collections import defaultdict
+from statistics import median
 
-from imageprocessing import area, MIN_SEGMENT_AREA, image_to_vec, Segment, image_to_segments, \
-	squared_dist_with_aspect_height, recreate_segment_from_page
+from imageprocessing import area, image_to_vec, squared_dist_with_aspect_height
+from segments import Segment, image_to_segments, MIN_SEGMENT_AREA
 from train import default_letter_model_dir
+from azure import AzurePage
 
 BEAM_WIDTH = 10
 BLACK_THRESHOLD = 110
@@ -38,12 +39,6 @@ class FontInfo:
 		embedding = self.pca.transform([scaled])[0]
 		return embedding
 
-class ClassifiedSegment:
-	def __init__(self, segment, ch, style):
-		self.segment = segment
-		self.ch = ch
-		self.style = style
-
 def find_closest_letter(embedding, aspect, height, k, fontinfo):
 	dists = [squared_dist_with_aspect_height(embedding, aspect, height, e, a, h) for (e, a, h) \
 				in zip(fontinfo.embeddings, fontinfo.aspects, fontinfo.heights)]
@@ -56,18 +51,6 @@ def classify_image_letter(im, k, fontinfo):
 	aspect = w / h
 	rel_height = h / fontinfo.unit_height
 	return find_closest_letter(embedding, aspect, rel_height, k, fontinfo)
-
-def polygon_to_rect(polygon):
-	x = polygon[0]
-	y = polygon[1]
-	w = polygon[2] - polygon[0]
-	h = polygon[5] - polygon[1]
-	return x, y, w, h
-
-def read_json_words(filename):
-	with open(filename, 'r') as f:
-		azure = json.load(f)
-	return azure['analyzeResult']['pages'][0]['words']
 
 def place_allowed(image_y, image_h, segment_y, segment_h, ch):
 	if ch == ',':
@@ -83,7 +66,8 @@ def test_ocr(page, x, y, im, fontinfo):
 	segments = image_to_segments(im, BLACK_THRESHOLD, strict=True)
 	segments = [segment for segment in segments if area(segment.im) >= MIN_SEGMENT_AREA]
 	segments = [segment for segment in segments if segment.im.size[1] >= 0.15 * fontinfo.unit_height]
-	segments = [recreate_segment_from_page(page, x, y, segment, threshold=BLACK_THRESHOLD) for segment in segments]
+	segments = [segment.transpose(x, y) for segment in segments]
+	segments = [segment.recreate_from_page(page, BLACK_THRESHOLD) for segment in segments]
 	merged = Segment.merge_with_stack(segments)
 	indexess = []
 	top_list = []
@@ -102,8 +86,7 @@ def test_ocr(page, x, y, im, fontinfo):
 	return style, ch
 
 def median_height(im, threshold=BLACK_THRESHOLD):
-	segments = image_to_segments(im, threshold=BLACK_THRESHOLD, strict=True)
-	segments = [segment for segment in segments if area(segment.im) >= MIN_SEGMENT_AREA]
+	segments = image_to_segments(im, BLACK_THRESHOLD, strict=True, min_area=MIN_SEGMENT_AREA)
 	heights = [segment.im.size[1] for segment in segments]
 	return median(heights)
 	
@@ -115,9 +98,11 @@ if __name__ == '__main__':
 	unit_height = median_height(image)
 	model_dir = default_letter_model_dir
 	fontinfo = FontInfo(model_dir, unit_height)
-	words = read_json_words(imagefile + '.json')
-	for word in words:
-		x, y, w, h = polygon_to_rect(word['polygon'])
-		subimage = image.crop((x, y, x+w, y+h))
-		style, ch = test_ocr(image, x, y, subimage, fontinfo)
-		print(style, ':', word['content'], ch)
+	page = AzurePage(imagefile + '.json')
+	for word in page.words():
+		subimage = image.crop((word.x, word.y, word.x+word.w, word.y+word.h))
+		style, ch = test_ocr(image, word.x, word.y, subimage, fontinfo)
+		if word.confidence < 0.8:
+			print(style, ':', word.content, ch, '!!!!!!!!!!!!!!!!!!!!!!')
+		else:
+			print(style, ':', word.content, ch)
