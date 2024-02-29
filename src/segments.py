@@ -1,6 +1,6 @@
 from PIL import Image, ImageChops
 
-from imageprocessing import normalize_image, white_image, area, is_black, find_components, expand_component
+from imageprocessing import normalize_image, white_image, make_image, area, is_black, find_components, expand_component
 
 MIN_SEGMENT_AREA = 6
 
@@ -30,6 +30,9 @@ class Segment:
 				if is_black(self.im, x, y, threshold):
 					comp.append((self.x + x, self.y + y, self.im.getpixel((x,y))))
 		return comp
+
+	def cut_from_page(self, page):
+		return page.crop((self.x, self.y, self.x+self.w, self.y+self.h))
 
 	def recreate_from_page(self, page, threshold):
 		component = self.component(threshold)

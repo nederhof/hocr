@@ -58,7 +58,7 @@ class RectangleSelector(ZoomImage):
 
 def open_selector(filename, segments, callback):
 	root = tk.Tk()
-	app = SelectRectangle(root, callback)
+	app = RectangleSelector(root, callback)
 	app.set_image(filename)
 	app.set_segments(segments)
 	app.mainloop()

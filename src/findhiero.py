@@ -2,13 +2,16 @@ import sys
 import os
 import pickle
 import heapq
+import json
+import csv
 from statistics import median
 from PIL import Image, ImageDraw
 
-from train import default_sign_letter_model_dir
+from train import default_sign_letter_model_dir, default_sign_model_dir
 from imageprocessing import area, image_to_vec, squared_dist_with_aspect
 from segments import Segment, image_to_segments, MIN_SEGMENT_AREA
 from rectangleselection import open_selector
+from transcribe import FontInfo as SignFontInfo, image_to_encoding
 
 BLACK_THRESHOLD = 110
 
@@ -48,7 +51,7 @@ def classify_image(im, fontinfo, pruned=False):
 		return False
 	elif rel_height > 3:
 		return False
-	elif pruned and rel_height <= 1.7:
+	elif pruned and rel_height <= 1.9:
 		return False
 	else:
 		return closest_shape_is_sign(embedding, aspect, fontinfo)
@@ -77,7 +80,7 @@ def close_to_any(segment1, segments, unit):
 def find_signs(im, model_dir):
 	segments = image_to_segments(im, BLACK_THRESHOLD, strict=True, min_area=MIN_SEGMENT_AREA)
 	segments = sorted(segments, key=lambda s: s.y)
-	heights = [segment.im.size[1] for segment in segments]
+	heights = [segment.h for segment in segments]
 	unit_height = median(heights)
 	fontinfo = FontInfo(model_dir, unit_height)
 	signs = []
@@ -120,6 +123,30 @@ def find_signs(im, model_dir):
 		rects.append((x, y, w, h))
 	return rects
 
+def manual_adjust(imagefile, im, rects):
+	segments = [Segment.from_rectangle(x, y, w, h) for x, y, w, h in rects]
+	open_selector(imagefile, segments, \
+			lambda segments: store_rectangles(imagefile, im, segments))
+
+def store_rectangles(imagefile, im, segments):
+	sign_fontinfo = SignFontInfo(default_sign_model_dir)
+	csvfile = imagefile + '.csv'
+	rows = []
+	for segment in segments:
+		subimage = segment.cut_from_page(im)
+		hiero = image_to_encoding(subimage, sign_fontinfo)
+		rows.append({'x': segment.x, 'y': segment.y, 'w': segment.w, 'h': segment.h, 'hiero': hiero})
+	rows = sorted(rows, key=lambda row: row['y'])
+	with open(csvfile, "w") as handle:
+		writer = csv.writer(handle, delimiter=' ')
+		for row in rows:
+			writer.writerow([row['x'], row['y'], row['w'], row['h'], row['hiero']])
+
+def find_hiero_in_page(imagefile):
+	im = Image.open(imagefile)
+	rects = find_signs(im, default_sign_letter_model_dir)
+	rects = manual_adjust(imagefile, im, rects)
+
 def add_rects_to_image(im, rects):
 	result = im.convert('RGB')
 	drawing = ImageDraw.Draw(result)
@@ -127,20 +154,13 @@ def add_rects_to_image(im, rects):
 		drawing.rectangle([(x, y), (x+w, y+h)], outline=(255,0,0))
 	return result
 
-def manual_adjust(imagefile, rects):
-	segments = [Segment.from_rectangle(x, y, w, h) for x, y, w, h in rects]
-	open_selector(imagefile, segments, next_stage)
-
-def next_stage(segments):
-	for segment in segments:
-		print(segment)
-
 if __name__ == '__main__':
 	imagefile = '/home/mjn/work/topbib/topbib/ocr/vol1/1.png'
 	if len(sys.argv) >= 2:
 		imagefile = sys.argv[1]
-	im = Image.open(imagefile)
-	rects = find_signs(im, default_sign_letter_model_dir)
-	rects = manual_adjust(imagefile, rects)
+	find_hiero_in_page(imagefile)
+	# im = Image.open(imagefile)
+	# rects = find_signs(im, default_sign_letter_model_dir)
+	# rects = manual_adjust(imagefile, im, rects)
 	# result = add_rects_to_image(im, rects)
 	# result.save("test.png")

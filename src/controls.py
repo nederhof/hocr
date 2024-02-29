@@ -23,6 +23,7 @@ V10 = '\U00013377'
 Z1 = '\U000133E4'
 Z2 = '\U000133E5'
 Z3 = '\U000133EA'
+Z4a = '\U000133EE'
 
 class Horizontal:
 	def __init__(self, groups):
@@ -32,6 +33,7 @@ class Horizontal:
 		normals = [group.normalize() for group in self.groups]
 		normals = group_triple(normals, N33, N33a)
 		normals = group_triple(normals, Z1, Z2)
+		normals = group_double(normals, Z1, Z4a)
 		if len(normals) > 0:
 			return Horizontal(normals)
 		else:
@@ -115,5 +117,14 @@ def group_triple(groups, unit, joint):
 				isinstance(groups[i+1], Basic) and groups[i+1].core == unit and \
 				isinstance(groups[i+2], Basic) and groups[i+2].core == unit:
 			groups = groups[:i] + [Basic(joint)] + groups[i+3:]
+		i += 1
+	return groups
+
+def group_double(groups, unit, joint):
+	i = 0
+	while i+1 < len(groups):
+		if isinstance(groups[i], Basic) and groups[i].core == unit and \
+				isinstance(groups[i+1], Basic) and groups[i+1].core == unit:
+			groups = groups[:i] + [Basic(joint)] + groups[i+2:]
 		i += 1
 	return groups
