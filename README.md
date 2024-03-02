@@ -18,15 +18,16 @@ This is experimental code at an early stage of development.
 
 ## To run OCR on page
 
-Assume `1.png` is image of page and `1.png.json` is output of Azure
+Assume `1.png` is image of page and `1.png.json` is output of Azure.
 
 ```
 python pipeline.py 1.png
 ```
 
-This will open window for identifying hieroglyphic. Save. Edit `1.png.csv` to correct hieroglyphic.
-
-Run again:
+This will open window for manually correcting recognition of hieroglyphic. 
+Save. Edit `1.png.csv` to correct hieroglyphic. Run again:
 ```
 python pipeline.py 1.png
 ```
+
+This will put HTML file in `transcriptions`.
