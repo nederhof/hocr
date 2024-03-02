@@ -1,0 +1,24 @@
+body {font-family: "Baskerville", serif; font-size: 14px;}
+
+i {color: black;}
+i.colored {color: blue;}
+
+b {color: black;}
+b.colored {color: magenta;}
+
+.sc {font-variant: small-caps;}
+.sc.colored {text-decoration: underline;}
+
+.pageheader {text-align: center; font-size: 12px; background-color: #AAF;}
+
+h1 {text-align: center; font-size: 16px; font-weight: normal;}
+
+p {text-indent: 15px; margin: 3px 10px;}
+
+img {width: 100%;}
+
+.hierojax {font-size: 20px;}
+
+.hidden {display: none;}
+
+.highlight {background-color: #DDD;}

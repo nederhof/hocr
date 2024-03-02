@@ -79,7 +79,6 @@ def produce_html(imagefile):
 		add_hiero(page, hiero)
 	unit_height = do_simple_ocr(page)
 	page.merge_paras(2 * unit_height)
-	page.to_html(transcription_dir, name, cutouts=False)
 	page.to_html(transcription_dir, name, cutouts=True)
 
 if __name__ == '__main__':

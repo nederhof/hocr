@@ -6,7 +6,7 @@ from PIL import Image
 from imageprocessing import make_image
 from segments import Segment, overlap
 
-def preamble(name, cutouts=False):
+def preamble(name):
 	 return \
 """<html>
 <head>
@@ -14,30 +14,13 @@ def preamble(name, cutouts=False):
 """ + \
 	'<title>{}</title>'.format(name) + \
 """
+<link rel="stylesheet" type="text/css" href="transcription.css" />
 <link rel="stylesheet" type="text/css" href="hierojax.css" />
+<script type="text/javascript" src="transcription.js"></script>
 <script type="text/javascript" src="hierojax.js"></script>
 <script type="text/javascript">
 	window.addEventListener("DOMContentLoaded", () => { hierojax.processFragments(); });
 </script>
-<style>
-body {font-family: "Baskerville", serif; font-size: 14px;}
-.sc {font-variant: small-caps;}
-""" + (\
-"""
-.pageheader {text-align: center; font-size: 12px; background-color: #AAF;}
-h1 {text-align: center; font-size: 16px; font-weight: normal; background-color: #DDD;}
-p {text-indent: 15px; margin: 3px 10px; background-color: #DDD;}
-""" \
-if cutouts else \
-"""
-.pageheader {text-align: center; font-size: 12px; background-color: #AAF;}
-h1 {text-align: center; font-size: 16px; font-weight: normal;}
-p {text-indent: 15px; margin: 3px 10px;}
-""") + \
-"""
-img {width: 100%;}
-.hierojax {font-size: 20px;}
-</style>
 </head>
 <body>
 """
@@ -216,17 +199,16 @@ class OcrPage:
 		return '<p>' + para_text + '</p>\n'
 
 	def to_html(self, target_dir, name, cutouts=False):
+		html_file = os.path.join(target_dir, name + '.html')
 		if cutouts:
 			rel_dir = name + 'cutouts'
 			cutouts_dir = os.path.join(target_dir, rel_dir)
 			if not os.path.exists(cutouts_dir):
 				os.mkdir(cutouts_dir)
-			html_file = os.path.join(target_dir, name + 'cutouts.html')
 			txts = [self.para_to_image_html(para, rel_dir, cutouts_dir, i) for i, para in enumerate(self.paras)]
 		else:
-			html_file = os.path.join(target_dir, name + '.html')
 			txts = [self.para_to_html(para) for para in self.paras]
-		html = preamble(name, cutouts=cutouts) + ''.join(txts) + postamble
+		html = preamble(name) + ''.join(txts) + postamble
 		with open(html_file, "w") as handle:
 			handle.write(html)
 
