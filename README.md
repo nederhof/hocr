@@ -30,4 +30,4 @@ Save. Edit `1.png.csv` to correct hieroglyphic. Run again:
 python pipeline.py 1.png
 ```
 
-This will put HTML file in `transcriptions`.
+This will put HTML file in folder `transcriptions`.
