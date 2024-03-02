@@ -2,7 +2,7 @@
 
 Transcribe (OCR) image of hieroglyphic to Unicode
 
-## To run OCR of hieroglyphic
+## To run OCR on image of hieroglyphic text
 
 ```
 cd src
@@ -16,7 +16,7 @@ python transcribe.py
 
 This is experimental code at an early stage of development.
 
-## To run OCR on page
+## To run OCR on page possibly containing hieroglyphic text
 
 Assume `1.png` is image of page and `1.png.json` is output of Azure.
 
