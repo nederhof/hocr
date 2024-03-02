@@ -84,7 +84,7 @@ def relative_height(ch, style):
 		case 'Ꜥ':
 			return 0.9
 	match style:
-		case 'plain':
+		case 'normal':
 			if ascender(ch):
 				return 1.5
 			elif small_ascender(ch):

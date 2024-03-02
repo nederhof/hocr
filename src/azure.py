@@ -1,27 +1,39 @@
 import sys
+import os
 import json
 from PIL import Image
 
 from imageprocessing import make_image
 from segments import Segment
+from ocrresults import OcrPage, OcrPara, OcrLine, OcrWord
 
 def polygon_to_rect(poly):
-	x = poly[0]
-	y = poly[1]
-	w = poly[2] - poly[0]
-	h = poly[5] - poly[1]
-	return x, y, w, h
+	xmin = poly[0]
+	xmax = poly[0]
+	ymin = poly[1]
+	ymax = poly[1]
+	for i in range(2, len(poly), 2):
+		xmin = min(xmin, poly[i])
+		xmax = max(xmax, poly[i])
+		ymin = min(ymin, poly[i+1])
+		ymax = max(ymax, poly[i+1])
+	return xmin, ymin, xmax-xmin, ymax-ymin
 
-class AzurePage:
+class AzurePage(OcrPage):
 	def __init__(self, filename):
-		self.im = Image.open(filename)
-		self.w, self.h = self.im.size
-		with open(filename + '.json', 'r') as f:
+		OcrPage.__init__(self, filename)
+		json_name = filename + '.json'
+		if not os.path.exists(json_name):
+			print('Need JSON in', json_name)
+			exit(0)
+		with open(json_name, 'r') as f:
 			self.results = json.load(f)
-		self.lines = [AzureLine(line) for line in self.results['analyzeResult']['pages'][0]['lines']]
-		words = [AzureWord(word) for word in self.results['analyzeResult']['pages'][0]['words']]
-		for word in words:
-			self.word_in_line(word)
+		self.paras = [self.make_para(para) for para in self.results['analyzeResult']['paragraphs']]
+		self.lines = [self.make_line(line) for line in self.results['analyzeResult']['pages'][0]['lines']]
+		for line in self.lines:
+			self.line_in_para(line)
+		for word in self.results['analyzeResult']['pages'][0]['words']:
+			self.word_in_line(self.make_word(word))
 		for elem in self.results['analyzeResult']['styles']:
 			if 'fontStyle' in elem:
 				style = elem['fontStyle']
@@ -29,6 +41,26 @@ class AzurePage:
 					offset = span['offset']
 					length = span['length']
 					self.style_in_words(offset, length, style)
+		self.text_corners = self.get_text_corners()
+
+	def make_para(self, para):
+		offset = para['spans'][0]['offset']
+		length = para['spans'][0]['length']
+		x, y, w, h = polygon_to_rect(para['boundingRegions'][0]['polygon'])
+		return OcrPara(offset, length, x, y, w, h)
+
+	def make_word(self, word):
+		content = word['content']
+		confidence = word['confidence']
+		offset = word['span']['offset']
+		length = word['span']['length']
+		x, y, w, h = polygon_to_rect(word['polygon'])
+		return OcrWord(content, confidence, offset, length, x, y, w, h)
+
+	def make_line(self, line):
+		offset = line['spans'][0]['offset']
+		length = line['spans'][0]['length']
+		return OcrLine(offset, length)
 
 	def word_in_line(self, word):
 		for line in self.lines:
@@ -36,6 +68,13 @@ class AzurePage:
 				line.words.append(word)
 				return
 		print("Error: Word not in line", word.content)
+
+	def line_in_para(self, line):
+		for para in self.paras:
+			if para.offset <= line.offset and line.offset < para.offset + para.length:
+				para.lines.append(line)
+				return
+		print("Error: Line not in paragraph")
 
 	def style_in_words(self, offset, length, style):
 		if style == 'normal':
@@ -47,31 +86,6 @@ class AzurePage:
 					if offset <= word.offset and word.offset < offset + length:
 						word.style = style
 
-	def remove_words(self, x, y, w, h):
-		None
-
-	def add_word(self, content, x, y, w, h):
-		None
-
-class AzureLine:
-	def __init__(self, line):
-		self.offset = line['spans'][0]['offset']
-		self.length = line['spans'][0]['length']
-		self.words = []
-
-class AzureWord:
-	def __init__(self, word):
-		self.content = word['content']
-		self.confidence = word['confidence']
-		self.offset = word['span']['offset']
-		self.length = word['span']['length']
-		self.x, self.y, self.w, self.h = polygon_to_rect(word['polygon'])
-		self.style = 'plain'
-		
-	def white_segment(self):
-		im = make_image(self.w, self.h, [])
-		return Segment(im, self.x, self.y)
-
 # For testing
 def open_window(filename):
 	import tkinter as tk
@@ -80,7 +94,9 @@ def open_window(filename):
 	app = RectangleSelector(root, lambda segments: print(len(segments)))
 	page = AzurePage(filename)
 	# segments = [word.white_segment() for line in page.lines for word in line.words if word.confidence < 0.8]
-	segments = [word.white_segment() for line in page.lines for word in line.words if word.style == 'italic']
+	# segments = [word.white_segment() for line in page.lines for word in line.words if word.style == 'italic']
+	# segments = [word.white_segment() for line in page.lines for word in line.words]
+	segments = [para.white_segment() for para in page.paras]
 	app.set_image(filename)
 	app.set_segments(segments)
 	app.mainloop()
@@ -98,5 +114,5 @@ def list_words(filename):
 if __name__ == '__main__':
 	if len(sys.argv) >= 2:
 		filename = sys.argv[1]
-		# open_window(filename)
-		list_words(filename)
+		open_window(filename)
+		# list_words(filename)

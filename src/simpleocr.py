@@ -62,27 +62,33 @@ def place_allowed(image_y, image_h, segment_y, segment_h, ch):
 	else:
 		return True
 
-def test_ocr(page, x, y, im, fontinfo):
-	segments = image_to_segments(im, BLACK_THRESHOLD, strict=True)
-	segments = [segment for segment in segments if area(segment.im) >= MIN_SEGMENT_AREA]
-	segments = [segment for segment in segments if segment.im.size[1] >= 0.15 * fontinfo.unit_height]
-	segments = [segment.transpose(x, y) for segment in segments]
-	segments = [segment.recreate_from_page(page, BLACK_THRESHOLD) for segment in segments]
-	merged = Segment.merge_with_stack(segments)
+def do_ocr(page, word, fontinfo):
+	im = page.im.crop((word.x, word.y, word.x+word.w, word.y+word.h))
+	segments = image_to_segments(im, BLACK_THRESHOLD, strict=True, min_area=MIN_SEGMENT_AREA)
+	segments = [segment for segment in segments if segment.h >= 0.15 * fontinfo.unit_height]
+	segments = [segment.transpose(word.x, word.y) for segment in segments]
+	segments = [segment.recreate_from_page(page.im, BLACK_THRESHOLD) for segment in segments]
+	segments = Segment.merge_with_stack(segments)
 	indexess = []
 	top_list = []
-	for segment in merged:
+	for segment in segments:
 		indexes = classify_image_letter(segment.im, BEAM_WIDTH, fontinfo)
 		indexess.append(indexes)
 		top_list.append(fontinfo.styles[indexes[0]])
 	style = max(set(top_list), key=top_list.count)
 	ch = ''
-	for segment, indexes in zip(merged, indexess):
+	for segment, indexes in zip(segments, indexess):
 		filtered = [index for index in indexes if fontinfo.styles[index] == style]
 		filtered = [index for index in indexes \
-				if place_allowed(y, im.size[1], segment.y, segment.im.size[1], fontinfo.chars[index])]
+				if place_allowed(word.y, im.size[1], segment.y, segment.h, fontinfo.chars[index])]
 		index = filtered[0] if len(filtered) > 0 else indexes[0]
 		ch += fontinfo.chars[index]
+	if style == 'smallcaps':
+		high = max(segment.h for segment in segments)
+		low = min(segment.h for segment in segments if segment.h > high/2)
+		if not ch.lower() in ['mss.']:
+			if high / low < 1.35 or high / low > 1.9 or high < 1.4 * fontinfo.unit_height:
+				style = 'normal'
 	return style, ch
 
 def median_height(im, threshold=BLACK_THRESHOLD):
@@ -98,11 +104,11 @@ if __name__ == '__main__':
 	unit_height = median_height(image)
 	model_dir = default_letter_model_dir
 	fontinfo = FontInfo(model_dir, unit_height)
-	page = AzurePage(imagefile + '.json')
-	for word in page.words():
-		subimage = image.crop((word.x, word.y, word.x+word.w, word.y+word.h))
-		style, ch = test_ocr(image, word.x, word.y, subimage, fontinfo)
-		if word.confidence < 0.8:
-			print(style, ':', word.content, ch, '!!!!!!!!!!!!!!!!!!!!!!')
-		else:
-			print(style, ':', word.content, ch)
+	page = AzurePage(imagefile)
+	for line in page.lines:
+		for word in line.words:
+			style, ch = do_ocr(image, word, fontinfo)
+			if word.confidence < 0.8:
+				print(style, ':', word.content, ch, '!!!!!!!!!!!!!!!!!!!!!!')
+			else:
+				print(style, ':', word.content, ch)

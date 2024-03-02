@@ -6,7 +6,7 @@ from PIL import Image, ImageTk
 
 from tables import get_name_to_unicode, get_unicode_to_name
 from transcribe import FontInfo as FontInfoSigns, classify_image_full
-from ocr import FontInfo as FontInfoLetters, classify_image_letter
+from simpleocr import FontInfo as FontInfoLetters, classify_image_letter
 
 name_to_unicode = get_name_to_unicode()
 unicode_to_name = get_unicode_to_name()
@@ -120,7 +120,7 @@ class SignStorer(Storer):
 		suffix = '-'+str(index) if index > 0 else ''
 		return os.path.join(target_sign_dir, str(self.code) + suffix + '.png')
 
-style_list = ['plain', 'italic', 'bold', 'smallcaps']
+style_list = ['normal', 'italic', 'bold', 'smallcaps']
 
 class LetterStorer(Storer):
 	def __init__(self, root, im, fontinfo, callback):

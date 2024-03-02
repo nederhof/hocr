@@ -4,7 +4,7 @@ from imageprocessing import area
 from segments import Segment, image_to_segments, MIN_SEGMENT_AREA
 from storing import SignStorer, LetterStorer
 from transcribe import FontInfo as FontInfoSigns
-from ocr import FontInfo as FontInfoLetters, median_height
+from simpleocr import FontInfo as FontInfoLetters, median_height
 from zoomimage import ZoomImage
 
 sign_model_dir = 'signmodel'
