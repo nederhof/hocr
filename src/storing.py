@@ -6,13 +6,13 @@ from PIL import Image, ImageTk
 
 from tables import get_name_to_unicode, get_unicode_to_name
 from transcribe import FontInfo as FontInfoSigns, classify_image_full
-from simpleocr import FontInfo as FontInfoLetters, classify_image_letter
+from simpleocr import FontInfo as FontInfoLetters, classify_image_letter, style_list
 
 name_to_unicode = get_name_to_unicode()
 unicode_to_name = get_unicode_to_name()
 
 exemplar_sign_dir = 'newgardiner'
-target_sign_dir = 'gardiner'
+target_sign_dir = 'topbibhiero'
 target_letter_dir = 'letters'
 
 CANVAS_SIZE = 200
@@ -24,6 +24,10 @@ def classify_sign(im, fontinfo):
 def classify_letter(im, fontinfo):
 	index = classify_image_letter(im, 1, fontinfo)[0]
 	return fontinfo.chars[index], fontinfo.styles[index]
+
+def white_image():
+	im = Image.new('RGBA', (CANVAS_SIZE, CANVAS_SIZE), 'WHITE')
+	return 0, 0, im
 
 class Storer(tk.Frame):
 	def __init__(self, root, im, fontinfo, callback):
@@ -102,6 +106,12 @@ class SignStorer(Storer):
 		if name in name_to_unicode:
 			self.code = name_to_unicode[name]
 			self.update_from_code()
+		elif name == 'shade':
+			self.code = 0x13443
+			self.update_from_code()
+		elif name in ['[', ']']:
+			self.code = ord(name)
+			self.update_from_code()
 
 	def update_from_code(self):
 		self.number.set(self.code)
@@ -110,17 +120,23 @@ class SignStorer(Storer):
 			 self.accept_button.configure(bg='red', activebackground='red')
 		else:
 			 self.accept_button.configure(bg='green', activebackground='green')
-		im = Image.open(filename)
-		x_offset, y_offset, rescaled = self.rescale_image(im)
+		if os.path.exists(filename):
+			im = Image.open(filename)
+			x_offset, y_offset, rescaled = self.rescale_image(im)
+		else:
+			x_offset, y_offset, rescaled = white_image()
 		self.im_code = ImageTk.PhotoImage(rescaled)
 		self.exemplar.create_image(x_offset, y_offset, anchor=tk.NW, image=self.im_code)
-		return unicode_to_name[chr(self.code)]
+		if chr(self.code) in unicode_to_name:
+			return unicode_to_name[chr(self.code)]
+		elif self.code == 0x13443:
+			return 'shade'
+		else:
+			return chr(self.code)
 
 	def target_filename(self, index=0):
 		suffix = '-'+str(index) if index > 0 else ''
 		return os.path.join(target_sign_dir, str(self.code) + suffix + '.png')
-
-style_list = ['normal', 'italic', 'bold', 'smallcaps']
 
 class LetterStorer(Storer):
 	def __init__(self, root, im, fontinfo, callback):

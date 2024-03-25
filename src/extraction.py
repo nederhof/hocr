@@ -96,8 +96,8 @@ class SignExtractor(Extractor):
 
 	def extract_signs(self, im):
 		segments = image_to_segments(im, self.threshold) 
-		merged = Segment.merge_with_overlap(segments)
-		return [segment for segment in merged if area(segment.im) >= MIN_SEGMENT_AREA]
+		# merged = Segment.merge_with_overlap(segments)
+		return [segment for segment in segments if area(segment.im) >= MIN_SEGMENT_AREA]
 
 	def adjust_fontinfo(self):
 		None

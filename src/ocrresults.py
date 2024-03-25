@@ -77,7 +77,8 @@ class OcrPage:
 
 	def remove_words(self, x, y, w, h):
 		for line in self.lines:
-			line.words = [word for word in line.words if not overlap(x, y, w, h, word.x, word.y, word.w, word.h)]
+			line.words = [word for word in line.words if \
+				not overlap(x, y, w, h, word.x, word.y, word.w, word.h, w_margin=0.1, h_margin=0.1)]
 
 	def add_word(self, content, style, x, y, w, h):
 		mid = y+h/2
@@ -106,7 +107,12 @@ class OcrPage:
 			ymax = max(ymax, para.y + para.h)
 		return xmin, ymin, xmax-xmin, ymax-ymin
 
+	def widen_to_lines(self):
+		for para in self.paras:
+			para.widen_to_lines()
+
 	def merge_paras(self, dist):
+		self.paras = sorted(self.paras, key=lambda p: p.y)
 		i = 0
 		while i+1 < len(self.paras):
 			this_para = self.paras[i]
@@ -183,9 +189,9 @@ class OcrPage:
 
 	def para_to_html(self, para):
 		if self.is_page_header(para):
-			return '<div class="pageheader">' + self.line_to_html(para.lines[0]) + '</div>'
+			return '<div class="pageheader">' + self.line_to_html(para.lines[0]) + '</div>\n'
 		elif self.is_section_header(para):
-			return '<h1>' + self.line_to_html(para.lines[0]) + '</h1>'
+			return '<h1>' + self.line_to_html(para.lines[0]) + '</h1>\n'
 		tokens = []
 		last_style_token = None
 		last_line_token = None
@@ -208,7 +214,9 @@ class OcrPage:
 			txts = [self.para_to_image_html(para, rel_dir, cutouts_dir, i) for i, para in enumerate(self.paras)]
 		else:
 			txts = [self.para_to_html(para) for para in self.paras]
-		html = preamble(name) + ''.join(txts) + postamble
+		content = ''.join(txts)
+		content = content.replace(' .', '.')
+		html = preamble(name) + content + postamble
 		with open(html_file, "w") as handle:
 			handle.write(html)
 
@@ -262,6 +270,12 @@ class OcrPara:
 		while i+1 < len(self.lines):
 			this_line = self.lines[i]
 			next_line = self.lines[i+1]
+			if len(this_line.words) == 0:
+				self.lines.pop(i)
+				continue
+			elif len(next_line.words) == 0:
+				self.lines.pop(i+1)
+				continue
 			_, this_y, _, this_h = this_line.get_text_corners()
 			_, next_y, _, next_h = next_line.get_text_corners()
 			if next_y < this_y + this_h - dist:
@@ -276,3 +290,14 @@ class OcrPara:
 	def white_segment(self):
 		im = make_image(self.w, self.h, [])
 		return Segment(im, self.x, self.y)
+
+	def widen_to_lines(self):
+		for line in self.lines:
+			if len(line.words) == 0:
+				continue
+			_, y, _, h = line.get_text_corners()
+			if y < self.y:
+				self.h += self.y - y
+				self.y = y
+			if self.y+self.h < y+h:
+				self.h += y+h - (self.y+self.h)

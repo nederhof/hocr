@@ -13,8 +13,13 @@ END = '\U00013438'
 M = '\U00013439'
 T = '\U0001343A'
 B = '\U0001343B'
+FULL_LOST = '\U00013443'
+HALF_LOST = '\U00013444'
+TALL_LOST = '\U00013445'
+WIDE_LOST = '\U00013446'
 CORNERS = [TS, BS, TE, BE, M, T, B]
 
+N5 = '\U000131F3'
 N33 = '\U00013212'
 N33a = '\U00013213'
 N35 = '\U00013216'
@@ -23,7 +28,12 @@ V10 = '\U00013377'
 Z1 = '\U000133E4'
 Z2 = '\U000133E5'
 Z3 = '\U000133EA'
+Z4 = '\U000133ED'
 Z4a = '\U000133EE'
+Z5 = '\U000133EF'
+Z5a = '\U000133F0'
+Z13 = '\U000133F8'
+Z14 = '\U000133F9'
 
 class Horizontal:
 	def __init__(self, groups):
@@ -40,7 +50,13 @@ class Horizontal:
 			return normals[0]
 
 	def to_unicode(self):
-		return HOR.join([self.sub_expr(group) for group in self.groups])
+		s = ''
+		for i in range(len(self.groups)):
+			if i > 0 and not self.is_bracket_open(self.groups[i-1]) and \
+							not self.is_bracket_close(self.groups[i]):
+				s += HOR
+			s += self.sub_expr(self.groups[i])
+		return s
 
 	@staticmethod
 	def sub_expr(group):
@@ -48,6 +64,14 @@ class Horizontal:
 			return BEGIN + group.to_unicode() + END
 		else:
 			return group.to_unicode()
+
+	@staticmethod
+	def is_bracket_open(group):
+		return isinstance(group, Basic) and group.core == '['
+
+	@staticmethod
+	def is_bracket_close(group):
+		return isinstance(group, Basic) and group.core == ']'
 
 class Vertical:
 	def __init__(self, groups):

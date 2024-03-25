@@ -5,17 +5,19 @@ import os
 import sys
 import heapq
 
-from imageprocessing import BLACK_THRESHOLD, area, image_to_vec, \
+from imageprocessing import BLACK_THRESHOLD, area, image_to_vec, normalize_image, \
 		aspects_similar, squared_dist, squared_dist_with_aspect
 from segments import MIN_SEGMENT_AREA, Segment, ClassifiedSegment, image_to_segments, segments_to_rect
-from tables import get_insertions
-from controls import Horizontal, Vertical, Basic, Z1
+from tables import get_insertions, signlist_dir, get_unicode_to_name
+from controls import Horizontal, Vertical, Basic, FULL_LOST, TALL_LOST, WIDE_LOST, \
+		N5, Z1, Z4, Z5, Z5a, Z13, Z14
 from train import default_sign_model_dir
 
 name_to_insertions = get_insertions()
+diagonals = [Z4, Z5, Z5a, Z14, FULL_LOST]
 
 BEAM_WIDTH = 10
-OVERLAP_RATIO = 8
+OVERLAP_RATIO = 6
 
 class FontInfo:
 	def __init__(self, model_dir):
@@ -31,6 +33,8 @@ class FontInfo:
 			self.aspects_core = pickle.load(handle)
 		with open(os.path.join(model_dir, 'aspectsfull.pickle'), 'rb') as handle:
 			self.aspects_full = pickle.load(handle)
+		with open(os.path.join(model_dir, 'dimensions.pickle'), 'rb') as handle:
+			self.dimensions = pickle.load(handle)
 		with open(os.path.join(model_dir, 'scaler.pickle'), 'rb') as handle:
 			self.scaler = pickle.load(handle)
 		with open(os.path.join(model_dir, 'pca.pickle'), 'rb') as handle:
@@ -42,29 +46,7 @@ class FontInfo:
 		embedding = self.pca.transform([scaled])[0]
 		return embedding
 
-# class ClassifiedSegment:
-# 	def __init__(self, segment, ch):
-# 		self.segment = segment
-# 		self.ch = ch
-# 
-# 	@staticmethod
-# 	def bounds(segments):
-# 		if len(segments) == 0:
-# 			return None
-# 		segment = segments[0].segment
-# 		x_min = segment.x
-# 		y_min = segment.y
-# 		x_max = segment.x + segment.im.size[0]
-# 		y_max = segment.y + segment.im.size[1]
-# 		for i in range(1, len(segments)):
-# 			segment_i = segments[i].segment
-# 			x_min = min(x_min, segment_i.x)
-# 			y_min = min(y_min, segment_i.y)
-# 			x_max = max(x_max, segment_i.x + segment_i.im.size[0])
-# 			y_max = max(y_max, segment_i.y + segment_i.im.size[1])
-# 		return x_min, y_min, x_max, y_max
-
-def squared_dist_with_aspect_all(vals1, aspect1, vals_core, vals_full, aspect2):
+def squared_dist_with_aspect_all(vals1, aspect1, vals_core, vals_full, aspect2, unit):
 	if aspects_similar(aspect1, aspect2):
 		if vals_full is not None:
 			return squared_dist(vals1, vals_full)
@@ -73,34 +55,36 @@ def squared_dist_with_aspect_all(vals1, aspect1, vals_core, vals_full, aspect2):
 	else:
 		return sys.float_info.max
 
-def find_closest_core(embedding, aspect, k, fontinfo):
-	dists = [squared_dist_with_aspect(embedding, aspect, e, a) for (e, a) \
-					in zip(fontinfo.embeddings_core, fontinfo.aspects_core)]
+def find_closest_core(embedding, aspect, width, height, k, fontinfo):
+	dists = [squared_dist_with_aspect(embedding, aspect, width, height, e, a, w, h) for (e, a, (w,h)) \
+					in zip(fontinfo.embeddings_core, fontinfo.aspects_core, fontinfo.dimensions)]
 	indexes = heapq.nlargest(k, range(len(dists)), key=lambda i: -dists[i])
 	return indexes
 
-def find_closest_full(embedding, aspect, k, fontinfo):
-	dists = [squared_dist_with_aspect_all(embedding, aspect, ec, ef, a) for (ec, ef, a) \
+def find_closest_full(embedding, aspect, k, fontinfo, unit):
+	dists = [squared_dist_with_aspect_all(embedding, aspect, ec, ef, a, unit) for (ec, ef, a) \
 				in zip(fontinfo.embeddings_core, fontinfo.embeddings_full, fontinfo.aspects_core)]
 	indexes = heapq.nlargest(k, range(len(dists)), key=lambda i: -dists[i])
 	return indexes
 
-def classify_image_core(im, k, fontinfo):
+def classify_image_core(im, k, fontinfo, unit):
 	embedding = fontinfo.image_to_embedding(im)
 	w, h = im.size
 	aspect = w / h
-	return find_closest_core(embedding, aspect, k, fontinfo)
+	w_rel = w / unit
+	h_rel = h / unit
+	return find_closest_core(embedding, aspect, w_rel, h_rel, k, fontinfo)
 
-def classify_image_full(im, k, fontinfo):
+def classify_image_full(im, k, fontinfo, unit=None):
 	embedding = fontinfo.image_to_embedding(im)
 	w, h = im.size
 	aspect = w / h
-	return find_closest_full(embedding, aspect, k, fontinfo)
+	return find_closest_full(embedding, aspect, k, fontinfo, unit)
 
-def classify_segments_core(segments, fontinfo):
+def classify_segments_core(segments, fontinfo, unit):
 	classifieds = []
 	for segment in segments:
-		ch_indexes = classify_image_core(segment.im, BEAM_WIDTH, fontinfo)
+		ch_indexes = classify_image_core(segment.im, BEAM_WIDTH, fontinfo, unit)
 		classifieds.append(ClassifiedSegment(segment.im, segment.x, segment.y, ch_indexes))
 	return classifieds
 
@@ -174,12 +158,12 @@ def correct_Z1(sign, widest, tallest):
 	if sign.w < widest / 9 and sign.h < tallest / 3 and ratio < 0.3:
 		sign.ch = Z1
 
-def image_to_signs(im, fontinfo):
+def image_to_signs(im, fontinfo, unit):
 	segments = image_to_segments(im, BLACK_THRESHOLD, min_area=MIN_SEGMENT_AREA)
 	widest = max([segment.w for segment in segments])
 	tallest = max([segment.h for segment in segments])
 	segments = sorted(segments, key=lambda s: -s.area())
-	classifieds_list = classify_segments_core(segments, fontinfo)
+	classifieds_list = classify_segments_core(segments, fontinfo, unit)
 	classifieds = find_best_chars(classifieds_list, fontinfo)
 	for sign in classifieds:
 		correct_Z1(sign, widest, tallest)
@@ -291,7 +275,21 @@ def corner_control(core, sign):
 
 def basic_to_structure(group):
 	group = sorted(group, key=lambda s: -s.area())
+	if len(group) > 3 and len([s.ch for s in group if s.ch in diagonals]) > 3:
+		merged = ClassifiedSegment.merge_all(group)
+		if merged.w < 0.8 * merged.h:
+			ch = TALL_LOST
+		elif merged.h < 0.8 * merged.w:
+			ch = WIDE_LOST
+		else:
+			ch = FULL_LOST
+		return Basic(ch)
 	core = group[0]
+	if len(group) > 1:
+		if core.ch == Z5a:
+			return Basic(Z4)
+		if core.ch == Z13:
+			return Basic(N5)
 	basic = Basic(core.ch)
 	corners = defaultdict(list)
 	for sign in group[1:]:
@@ -331,10 +329,13 @@ def horsubgroup_to_structure(group):
 		return basic_to_structure(group)
 
 def image_to_encoding(im, fontinfo, dir=None):
-	signs = image_to_signs(im, fontinfo)
+	w, h = im.size
 	if dir is None:
-		w, h = im.size
 		dir = 'v' if h > w else 'h'
+		unit = min(w, h)
+	else:
+		unit = h if dir == 'h' else w
+	signs = image_to_signs(im, fontinfo, unit)
 	if dir == 'h':
 		groups = partition_hor(signs)
 		encodings = [horsubgroup_to_structure(group).normalize().to_unicode() for group in groups]
@@ -349,18 +350,14 @@ def print_transcription(filename, fontinfo, unicode_to_name):
 	encoding = image_to_encoding(im, fontinfo, dir=direction)
 	print(' '.join([unicode_to_name[ch] for ch in encoding]))
 
-# for testing can be used without parameters
+# For testing.
 if __name__ == '__main__':
-	from tables import get_unicode_to_name
-	from imageprocessing import normalize_image
-	images = [\
-		'tests/test1.png', 'tests/test2.png', 'tests/test3.png', 'tests/test4.png', 'tests/test5.png',
-		'tests/test6.png', 'tests/test7.png', 'tests/test8.png', 'tests/test9.png', 'tests/test10.png',
-		'tests/test11.png', 'tests/test12.png', 'tests/test13.png', 'tests/test14.png', 'tests/test15.png']
 	direction = 'h'
 	model_dir = default_sign_model_dir
-	if len(sys.argv) >= 2:
-		images = [sys.argv[1]]
+	if len(sys.argv) < 2:
+		print('First argument is image')
+		exit(-1)
+	images = [sys.argv[1]]
 	if len(sys.argv) >= 3:
 		direction = sys.argv[2]
 	if len(sys.argv) >= 4:

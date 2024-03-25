@@ -12,6 +12,8 @@ from segments import Segment, image_to_segments, MIN_SEGMENT_AREA
 from train import default_letter_model_dir
 from azure import AzurePage
 
+style_list = ['normal', 'italic', 'bold', 'smallcaps']
+
 BEAM_WIDTH = 10
 BLACK_THRESHOLD = 110
 
@@ -74,8 +76,11 @@ def do_ocr(page, word, fontinfo):
 	for segment in segments:
 		indexes = classify_image_letter(segment.im, BEAM_WIDTH, fontinfo)
 		indexess.append(indexes)
-		top_list.append(fontinfo.styles[indexes[0]])
-	style = max(set(top_list), key=top_list.count)
+		first = indexes[0]
+		if not fontinfo.chars[first] in [',', '.'] or len(segments) == 1:
+			top_list.append(fontinfo.styles[first])
+	top_list_sorted = [style for style in style_list if style in top_list]
+	style = max(top_list_sorted, key=top_list.count)
 	ch = ''
 	for segment, indexes in zip(segments, indexess):
 		filtered = [index for index in indexes if fontinfo.styles[index] == style]

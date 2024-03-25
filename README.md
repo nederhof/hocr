@@ -7,12 +7,14 @@ Transcribe (OCR) image of hieroglyphic to Unicode
 ```
 cd src
 unzip gardiner.zip
-unzip newgardiner.zip
 unzip letters.zip
+unzip newgardiner.zip
+unzip topbibhiero.zip
 python tables.py
 python train.py
-python transcribe.py
+python evaltranscribe.py
 ```
+Now look in directory `transcriptions` for the results.
 
 This is experimental code at an early stage of development.
 

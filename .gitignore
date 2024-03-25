@@ -1,7 +1,9 @@
 src/signlist/insertions.pickle
 src/signlist/names.pickle
+src/signlist/dimensions.pickle
 src/gardiner
 src/newgardiner
 src/__pycache__
 src/model
 src/tmp
+src/transcriptions

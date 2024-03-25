@@ -1,6 +1,6 @@
 import os
 import sys
-from PIL import Image, ImageOps
+from PIL import Image
 import pickle
 import re
 
@@ -11,7 +11,7 @@ from tables import get_unicode_to_name, numerals, composite, repeated_single
 from imageprocessing import BLACK_THRESHOLD, normalize_image, area, image_to_vec
 from segments import image_to_segments
 
-default_sign_font_dirs = ['gardiner', 'newgardiner']
+default_sign_font_dirs = ['gardiner', 'newgardiner', 'topbibhiero']
 default_letter_font_dirs = ['letters']
 default_sign_model_dir = 'signmodel'
 default_letter_model_dir = 'lettermodel'
@@ -227,12 +227,15 @@ def get_prototype_letter(path, ch, style):
 
 def get_prototypes_signs(prototype_dirs):
 	names = get_unicode_to_name()
+	with open('signlist/dimensions.pickle', 'rb') as handle:
+		dimension_table = pickle.load(handle)
 	chars = []
 	partss = []
 	vecs_core = []
 	vecs_full = []
 	aspects_core = []
 	aspects_full = []
+	dimensions = []
 	for prototype_dir in prototype_dirs:
 		prototype_files = os.listdir(prototype_dir)
 		for filename in prototype_files:
@@ -241,7 +244,7 @@ def get_prototypes_signs(prototype_dirs):
 			if ext == '.png':
 				codepoint = re.sub('-[0-9]+', '', base)
 				ch = chr(int(codepoint))
-				name = names[ch]
+				name = names[ch] if ch in names else ch
 				if name in numerals or name in repeated_single:
 					continue
 				parts, vec_core, vec_full, aspect_core, aspect_full = get_prototype_sign(path, name)
@@ -251,7 +254,9 @@ def get_prototypes_signs(prototype_dirs):
 				vecs_full.append(vec_full)
 				aspects_core.append(aspect_core)
 				aspects_full.append(aspect_full)
-	return chars, partss, vecs_core, vecs_full, aspects_core, aspects_full
+				dim = dimension_table[ch] if ch in dimension_table else (-1,-1)
+				dimensions.append(dim)
+	return chars, partss, vecs_core, vecs_full, aspects_core, aspects_full, dimensions
 
 def get_prototypes_letters(prototype_dirs):
 	chars = []
@@ -277,7 +282,7 @@ def get_prototypes_letters(prototype_dirs):
 	return chars, styles, vecs, aspects, heights
 
 def get_prototypes_signs_letters(sign_dirs, letter_dirs):
-	_, _, sign_vecs, _, sign_aspects, _ = get_prototypes_signs(sign_dirs)
+	_, _, sign_vecs, _, sign_aspects, _, _ = get_prototypes_signs(sign_dirs)
 	_, _, letter_vecs, letter_aspects, _ = get_prototypes_letters(letter_dirs)
 	issign = [True] * len(sign_vecs) + [False] * len(letter_vecs)
 	vecs = sign_vecs + letter_vecs
@@ -285,7 +290,7 @@ def get_prototypes_signs_letters(sign_dirs, letter_dirs):
 	return issign, vecs, aspects
 
 def train_signs(prototype_dirs, model_dir, pca_dim):
-	chars, partss, vecs_core, vecs_full, aspects_core, aspects_full = \
+	chars, partss, vecs_core, vecs_full, aspects_core, aspects_full, dimensions = \
 			get_prototypes_signs(prototype_dirs)
 	scaler = StandardScaler()
 	scaled_core = scaler.fit_transform(vecs_core)
@@ -313,6 +318,8 @@ def train_signs(prototype_dirs, model_dir, pca_dim):
 		pickle.dump(aspects_core, handle)
 	with open(os.path.join(model_dir, 'aspectsfull.pickle'), 'wb') as handle:
 		pickle.dump(aspects_full, handle)
+	with open(os.path.join(model_dir, 'dimensions.pickle'), 'wb') as handle:
+		pickle.dump(dimensions, handle)
 	with open(os.path.join(model_dir, 'scaler.pickle'), 'wb') as handle:
 		pickle.dump(scaler, handle)
 	with open(os.path.join(model_dir, 'pca.pickle'), 'wb') as handle:

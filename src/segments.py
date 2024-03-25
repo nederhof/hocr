@@ -1,11 +1,15 @@
 from PIL import Image, ImageChops
 
-from imageprocessing import normalize_image, white_image, make_image, area, is_black, find_components, expand_component
+from imageprocessing import normalize_image, white_image, make_image, area, \
+		is_black, n_black, find_components, expand_component
 
 MIN_SEGMENT_AREA = 6
+MIN_BLACK_AREA = 0.01
 
-def overlap(x1, y1, w1, h1, x2, y2, w2, h2):
-	return x1 < x2 + w2 and x2 < x1 + w1 and y1 < y2 + h2 and y2 < y1 + h1
+def overlap(x1, y1, w1, h1, x2, y2, w2, h2, w_margin=1, h_margin=1):
+	w = w_margin * min(w1, w2)
+	h = h_margin * min(h1, h2)
+	return x1 < x2 + w2 - w and x2 < x1 + w1 - w and y1 < y2 + h2 - h and y2 < y1 + h1 - h
 
 class Segment:
 	def __init__(self, im, x, y):
@@ -73,6 +77,13 @@ class Segment:
 		return Segment(im, x_min, y_min)
 
 	@staticmethod
+	def merge_all(segments):
+		merged = Segment.copy(segments[0])
+		for segment in segments:
+			merged = Segment.merge(merged, segment)
+		return merged
+
+	@staticmethod
 	def merge_big(segments, size=MIN_SEGMENT_AREA):
 		merged = None
 		for segment in segments:
@@ -138,11 +149,23 @@ class ClassifiedSegment(Segment):
 		Segment.__init__(self, im, x, y)
 		self.ch = ch
 
-def image_to_segments(im, threshold, strict=False, min_area=None):
+	@staticmethod
+	def merge_all(segments):
+		merged = Segment.merge_all(segments)
+		return ClassifiedSegment(merged.im, merged.x, merged.y, None)
+
+def image_to_segments(im, threshold, strict=False, min_area=None, min_black_area=None):
 	components = find_components(im, threshold, strict=strict)
 	segments = [Segment.from_component(c) for c in components]
 	if min_area is not None:
-		segments = [segment for segment in segments if area(segment.im) >= min_area]
+		segments = [segment for segment in segments if min_area <= area(segment.im)]
+	if min_black_area is not None:
+		x = len(segments)
+		segments = [segment for segment in segments \
+			if n_black(segment.im, threshold) >= min_black_area * area(segment.im)]
+		y = len(segments)
+		if y < x:
+			print('from', x, 'to', y)
 	return segments
 
 def segments_to_rect(segments):

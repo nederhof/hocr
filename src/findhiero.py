@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 
 from train import default_sign_letter_model_dir, default_sign_model_dir
 from imageprocessing import area, image_to_vec, squared_dist_with_aspect
-from segments import Segment, image_to_segments, MIN_SEGMENT_AREA
+from segments import Segment, image_to_segments, MIN_SEGMENT_AREA, MIN_BLACK_AREA
 from rectangleselection import open_selector
 from transcribe import FontInfo as SignFontInfo, image_to_encoding
 
@@ -35,8 +35,8 @@ class FontInfo:
 		embedding = self.pca.transform([scaled])[0]
 		return embedding
 
-def closest_shape_is_sign(embedding, aspect, fontinfo):
-	dists = [squared_dist_with_aspect(embedding, aspect, e, a) for \
+def closest_shape_is_sign(embedding, w, h, fontinfo):
+	dists = [squared_dist_with_aspect(embedding, w, h, e, a) for \
 			(e, a) in zip(fontinfo.embeddings, fontinfo.aspects)]
 	indexes = heapq.nlargest(1, range(len(dists)), key=lambda i: -dists[i])
 	return fontinfo.issign[indexes[0]]
@@ -44,7 +44,6 @@ def closest_shape_is_sign(embedding, aspect, fontinfo):
 def classify_image(im, fontinfo, pruned=False):
 	embedding = fontinfo.image_to_embedding(im)
 	w, h = im.size
-	aspect = w / h
 	rel_width = w / fontinfo.unit_height
 	rel_height = h / fontinfo.unit_height
 	if rel_width < 0.5 or rel_height < 0.5:
@@ -54,7 +53,7 @@ def classify_image(im, fontinfo, pruned=False):
 	elif pruned and rel_height <= 1.9:
 		return False
 	else:
-		return closest_shape_is_sign(embedding, aspect, fontinfo)
+		return closest_shape_is_sign(embedding, w, h, fontinfo)
 
 def close_to(segment1, segment2, unit):
 	x1 = segment1.x
@@ -78,7 +77,8 @@ def close_to_any(segment1, segments, unit):
 	return False
 
 def find_signs(im, model_dir):
-	segments = image_to_segments(im, BLACK_THRESHOLD, strict=True, min_area=MIN_SEGMENT_AREA)
+	segments = image_to_segments(im, BLACK_THRESHOLD, strict=True, \
+			min_area=MIN_SEGMENT_AREA, min_black_area=MIN_BLACK_AREA)
 	segments = sorted(segments, key=lambda s: s.y)
 	heights = [segment.h for segment in segments]
 	unit_height = median(heights)

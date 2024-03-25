@@ -1,10 +1,15 @@
 import os
 import pickle
 import json
+from PIL import Image, ImageOps, ImageFont, ImageDraw
 
 from controls import TS, BS, TE, BE, M, T, B
 
 signlist_dir = 'signlist'
+font_name = 'NewGardinerSMP.ttf'
+font_size = 50
+first_char = 0x13000
+last_char = 0x1342F
 
 def get_name_to_unicode():
 	filename = os.path.join(signlist_dir, 'unipoints.json')
@@ -83,6 +88,33 @@ def get_insertions():
 		insertions = pickle.load(handle)
 	return insertions
 
+def glyph_size(c, font, font_size):
+	img = Image.new('RGB', (font_size * 2, font_size * 2), (255, 255, 255))
+	draw = ImageDraw.Draw(img)
+	draw.text((0, 0), c, font=font, fill='black')
+	inverted = ImageOps.invert(img)
+	bbox = inverted.getbbox()
+	return bbox[2]-bbox[0], bbox[3]-bbox[1]
+
+def rel_dimensions(font, font_size, first_char, last_char):
+	c_first = chr(first_char)
+	_, unit = glyph_size(c_first, font, font_size)
+	ch_to_size = {}
+	chars = list(range(first_char, last_char+1)) + [0x5B, 0x5D]
+	for num in chars:
+		c = chr(num)
+		w, h = glyph_size(c, font, font_size)
+		ch_to_size[c] = (w / unit, h / unit)
+	return ch_to_size
+
+def make_dimensions():
+	font_path = os.path.join(signlist_dir, font_name)
+	font = ImageFont.truetype(font_path, font_size)
+	dims = rel_dimensions(font, font_size, first_char, last_char)
+	with open(os.path.join(signlist_dir, 'dimensions.pickle'), 'wb') as handle:
+		pickle.dump(dims, handle)
+
 if __name__ == '__main__':
 	make_names()
 	make_insertions()
+	make_dimensions()

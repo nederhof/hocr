@@ -48,6 +48,15 @@ def is_white(im, x, y, threshold):
 def is_black(im, x, y, threshold):
 	return in_image(im, x, y) and im.getpixel((x,y)) <= threshold
 
+def n_black(im, threshold):
+	w, h = im.size
+	n = 0
+	for x in range(w):
+		for y in range(h):
+			if is_black(im, x, y, threshold):
+				n += 1
+	return n
+
 def aspects_similar(aspect1, aspect2):
 	if aspect1 < 0.3 or 1/aspect1 < 0.3:
 		return abs(aspect1-aspect2) / aspect1 < 0.3
@@ -56,14 +65,19 @@ def aspects_similar(aspect1, aspect2):
 	else:
 		return abs(aspect1-aspect2) / aspect1 < 0.1
 
+def sizes_similar(s1, s2):
+	return (s1 > 0.25 or s2 < 0.75) and (s2 > 0.25 or s1 < 0.75)
+
 def heights_similar(h1, h2):
 	return abs(h1 - h2) < 0.25
 
 def squared_dist(vals1, vals2):
 	return sum([(val1-val2)*(val1-val2) for (val1,val2) in zip(vals1,vals2)])
 
-def squared_dist_with_aspect(vals1, aspect1, vals2, aspect2):
-	if aspects_similar(aspect1, aspect2):
+def squared_dist_with_aspect(vals1, aspect1, w1, h1, vals2, aspect2, w2, h2):
+	if w2 > 0 and h2 > 0 and (not sizes_similar(w1, w2) or not sizes_similar(h1, h2)):
+		return sys.float_info.max
+	elif aspects_similar(aspect1, aspect2):
 		return squared_dist(vals1, vals2)
 	else:
 		return sys.float_info.max
