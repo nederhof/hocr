@@ -10,11 +10,12 @@ from imageprocessing import BLACK_THRESHOLD, area, image_to_vec, normalize_image
 from segments import MIN_SEGMENT_AREA, Segment, ClassifiedSegment, image_to_segments, segments_to_rect
 from tables import get_insertions, signlist_dir, get_unicode_to_name
 from controls import Horizontal, Vertical, Basic, FULL_LOST, TALL_LOST, WIDE_LOST, \
-		N5, Z1, Z4, Z5, Z5a, Z13, Z14
+		D12, N5, Z1, Z4, Z5, Z5a, Z13, Z14
 from train import default_sign_model_dir
 
 name_to_insertions = get_insertions()
 diagonals = [Z4, Z5, Z5a, Z14, FULL_LOST]
+circles = [D12, Z13]
 
 BEAM_WIDTH = 10
 OVERLAP_RATIO = 6
@@ -288,7 +289,7 @@ def basic_to_structure(group):
 	if len(group) > 1:
 		if core.ch == Z5a:
 			return Basic(Z4)
-		if core.ch == Z13:
+		if core.ch in circles:
 			return Basic(N5)
 	basic = Basic(core.ch)
 	corners = defaultdict(list)

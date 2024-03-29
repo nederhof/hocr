@@ -61,6 +61,14 @@ function toggleColors() {
 		else
 			it.classList.remove('colored');
 	}
+	const cites = document.getElementsByTagName("cite");
+	for (let i = 0; i < cites.length; i++) { 
+		const cite = cites[i];
+		if (colored) 
+			cite.classList.add('colored');
+		else
+			cite.classList.remove('colored');
+	}
 	const spans = document.getElementsByTagName("span");
 	for (let i = 0; i < spans.length; i++) { 
 		const sc = spans[i];

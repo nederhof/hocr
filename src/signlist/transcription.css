@@ -6,8 +6,8 @@ i.colored {color: blue;}
 b {color: black;}
 b.colored {color: magenta;}
 
-.sc {font-variant: small-caps;}
-.sc.colored {text-decoration: underline;}
+cite {font-style: normal; font-variant: small-caps;}
+cite.colored {text-decoration: underline;}
 
 .pageheader {text-align: center; font-size: 12px; background-color: #AAF;}
 

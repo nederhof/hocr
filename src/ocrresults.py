@@ -1,8 +1,10 @@
 import sys
 import os
 import re
+import shutil
 from PIL import Image
 
+from tables import signlist_dir
 from imageprocessing import make_image
 from segments import Segment, overlap
 
@@ -29,6 +31,13 @@ postamble = """</body>
 </html>
 """
 
+def prepare_transcription_dir(target_dir):
+	if not os.path.exists(target_dir):
+		os.mkdir(target_dir)
+	for f in ['hierojax.css', 'hierojax.js', 'transcription.css', 'transcription.js', \
+				'NewGardinerSMP.ttf']:
+		shutil.copy(os.path.join(signlist_dir, f), os.path.join(target_dir, f))
+
 class Token:
 	def __init__(self, style, content, first=False):
 		self.style = style
@@ -40,7 +49,7 @@ class Token:
 				case 'bold':
 					tag = '<b>'
 				case 'smallcaps':
-					tag = '<span class="sc">'
+					tag = '<cite>'
 		self.content = tag + content
 		self.sep = ''
 
@@ -52,7 +61,7 @@ class Token:
 			case 'bold':
 				tag = '</b>'
 			case 'smallcaps':
-				tag = '</span>'
+				tag = '</cite>'
 		if self.content[-1] in [',', ';']:
 			self.content = self.content[:-1] + tag + self.content[-1]
 		else:

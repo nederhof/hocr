@@ -73,12 +73,16 @@ def do_ocr(page, word, fontinfo):
 	segments = Segment.merge_with_stack(segments)
 	indexess = []
 	top_list = []
+	top_list_filtered = []
 	for segment in segments:
 		indexes = classify_image_letter(segment.im, BEAM_WIDTH, fontinfo)
 		indexess.append(indexes)
 		first = indexes[0]
-		if not fontinfo.chars[first] in [',', '.'] or len(segments) == 1:
-			top_list.append(fontinfo.styles[first])
+		top_list.append(fontinfo.styles[first])
+		if not fontinfo.chars[first] in [',', '.']:
+			top_list_filtered.append(fontinfo.styles[first])
+	if len(top_list_filtered) > 0:
+		top_list = top_list_filtered
 	top_list_sorted = [style for style in style_list if style in top_list]
 	style = max(top_list_sorted, key=top_list.count)
 	ch = ''

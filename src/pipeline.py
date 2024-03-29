@@ -8,6 +8,7 @@ from findhiero import find_hiero_in_page
 from train import default_letter_model_dir
 from azure import AzurePage
 from simpleocr import FontInfo, median_height, do_ocr
+from ocrresults import prepare_transcription_dir
 
 transcription_dir = 'transcriptions'
 
@@ -60,6 +61,8 @@ def adjust_word(page, word, fontinfo):
 			word.content = content
 	word.content = re.sub(r'\bIst\b', '1st', word.content)
 	word.content = re.sub(r'([0-9])-([0-9])', r'\1–\2', word.content)
+	word.content = re.sub(r'(\w)Ꜥ', r'\1ꜥ', word.content)
+	word.content = re.sub(r'\bꜥ', r'Ꜥ', word.content)
 	if re.match(r'[0-9]', word.content):
 		word.content = word.content.replace('o', '0')
 		word.content = word.content.replace('I', '1')
@@ -87,8 +90,7 @@ def get_page(imagefile):
 	return AzurePage(imagefile)
 
 def produce_html(imagefile):
-	if not os.path.exists(transcription_dir):
-		os.mkdir(transcription_dir)
+	prepare_transcription_dir(transcription_dir)
 	name, _ = os.path.splitext(os.path.basename(imagefile))
 	page = get_page(imagefile)
 	hieros = read_csv(imagefile)

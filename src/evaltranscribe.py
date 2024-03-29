@@ -4,10 +4,10 @@ import shutil
 from PIL import Image
 from Levenshtein import distance
 
-from tables import signlist_dir
 from train import default_sign_model_dir
 from transcribe import FontInfo, image_to_encoding
 from imageprocessing import normalize_image
+from ocrresults import prepare_transcription_dir
 
 test_dir = 'tests'
 target_dir = 'transcriptions'
@@ -36,6 +36,9 @@ img { max-height: 30px; }
 postamble = """</body>
 </html>
 """
+
+table_header = '<tr><th>file</th><th>image</th>' + \
+			'<th>ground truth</th><th>OCR</th></tr>\n'
 
 def read_page_csv(csv_file):
 	with open(csv_file) as handler:
@@ -114,7 +117,7 @@ def eval_results(pages):
 			n_total += n
 			hits_total += hits
 			rows_total += rows
-	table = '<table>' + rows_total + '</table>\n'
+	table = '<table>\n' + table_header + rows_total + '</table>\n'
 	accuracy = '<p>Accuracy ' + '{:3.4f} '.format(hits_total / n_total) + \
 		f'[{hits_total} of {n_total}]' + '</p>\n'
 	return table + accuracy
@@ -128,7 +131,7 @@ def eval_test_results(tests):
 		n_total += n
 		hits_total += hits
 		rows += row
-	table = '<table>\n' + rows + '</table>\n'
+	table = '<table>\n' + table_header + rows + '</table>\n'
 	accuracy = '<p>Accuracy ' + '{:3.4f} '.format(hits_total / n_total) + \
 		f'[{hits_total} of {n_total}]' + '</p>\n'
 	return table + accuracy
@@ -145,14 +148,9 @@ def get_pages():
 	return pages
 
 def prepare_target_dir():
-	if not os.path.exists(target_dir):
-		os.mkdir(target_dir)
 	cutout_path = os.path.join(target_dir, cutout_dir)
 	if not os.path.exists(cutout_path):
 		os.mkdir(cutout_path)
-	for f in ['hierojax.css', 'hierojax.js', 'transcription.css', 'transcription.js', \
-				'NewGardinerSMP.ttf']:
-		shutil.copy(os.path.join(signlist_dir, f), os.path.join(target_dir, f))
 
 def store_html(body):
 	html = preamble + body + postamble
