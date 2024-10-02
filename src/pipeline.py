@@ -70,6 +70,7 @@ def adjust_word(page, word, fontinfo):
 		word.content = word.content.replace('z', '2')
 	word.content = re.sub(r'\.\.\.\. *$', '. \u2026', word.content)
 	word.content = re.sub(r'\.\.\. *$', '\u2026', word.content)
+	word.content = re.sub(r'&', '&amp;', word.content)
 	if word.style == 'smallcaps':
 		word.content = word.content.title()
 	if word.style == 'italic' and re.match(r'[0-9][\.\),]?$', word.content):

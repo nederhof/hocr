@@ -15,6 +15,8 @@ h1 {text-align: center; font-size: 16px; font-weight: normal;}
 
 p {text-indent: 15px; margin: 3px 10px;}
 
+textarea {width: 100%;}
+
 img {width: 100%;}
 
 .hierojax {font-size: 20px;}

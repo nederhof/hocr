@@ -20,7 +20,7 @@ preamble = """<html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <title>OCR results</title>
-<link rel="stylesheet" type="text/css" href="hierojax.css" />
+<link rel="stylesheet" type="text/css" href="hierojax.css">
 <style>
 table, th, td { border: 1px solid; }
 img { max-height: 30px; }

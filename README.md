@@ -33,3 +33,5 @@ python pipeline.py 1.png
 ```
 
 This will put HTML file in folder `transcriptions`.
+
+

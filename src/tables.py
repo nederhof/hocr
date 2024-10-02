@@ -5,6 +5,7 @@ from PIL import Image, ImageOps, ImageFont, ImageDraw
 
 from controls import TS, BS, TE, BE, M, T, B
 
+resources_dir = 'resources'
 signlist_dir = 'signlist'
 font_name = 'NewGardinerSMP.ttf'
 font_size = 50

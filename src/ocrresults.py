@@ -4,7 +4,7 @@ import re
 import shutil
 from PIL import Image
 
-from tables import signlist_dir
+from tables import resources_dir, signlist_dir
 from imageprocessing import make_image
 from segments import Segment, overlap
 
@@ -16,13 +16,10 @@ def preamble(name):
 """ + \
 	'<title>{}</title>'.format(name) + \
 """
-<link rel="stylesheet" type="text/css" href="transcription.css" />
-<link rel="stylesheet" type="text/css" href="hierojax.css" />
+<link rel="stylesheet" type="text/css" href="transcription.css">
+<link rel="stylesheet" type="text/css" href="hierojax.css">
 <script type="text/javascript" src="transcription.js"></script>
 <script type="text/javascript" src="hierojax.js"></script>
-<script type="text/javascript">
-	window.addEventListener("DOMContentLoaded", () => { hierojax.processFragments(); });
-</script>
 </head>
 <body>
 """
@@ -35,7 +32,9 @@ def prepare_transcription_dir(target_dir):
 	if not os.path.exists(target_dir):
 		os.mkdir(target_dir)
 	for f in ['hierojax.css', 'hierojax.js', 'transcription.css', 'transcription.js', \
-				'NewGardinerSMP.ttf']:
+				'requirements.txt', 'Makefile', 'correctpage.sh', 'correcter.py']:
+		shutil.copy(os.path.join(resources_dir, f), os.path.join(target_dir, f))
+	for f in ['NewGardinerSMP.ttf']:
 		shutil.copy(os.path.join(signlist_dir, f), os.path.join(target_dir, f))
 
 class Token:
