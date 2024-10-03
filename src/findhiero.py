@@ -155,7 +155,7 @@ def add_rects_to_image(im, rects):
 	return result
 
 if __name__ == '__main__':
-	imagefile = '/home/mjn/work/topbib/topbib/ocr/vol1/1.png'
+	imagefile = '/home/mn31/work/topbib/topbib/ocr/vol1/1.png'
 	if len(sys.argv) >= 2:
 		imagefile = sys.argv[1]
 	find_hiero_in_page(imagefile)

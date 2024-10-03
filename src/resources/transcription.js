@@ -86,7 +86,6 @@ function setColorsElem(elem) {
 				sc.classList.remove('colored');
 		}
 	}
-	hierojax.processFragmentsIn(elem);
 }
 
 function cleanExtras() {
@@ -122,6 +121,7 @@ function finishEdit() {
 	request.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
 	const pageText = '<html>\n' + document.documentElement.innerHTML + '\n</html>\n';
 	request.send(JSON.stringify({ 'text': pageText }));
+	setTimeout(function() { close(); }, 500);
 }
 
 function editParagraph(i) {
@@ -150,6 +150,7 @@ function propagateParEdit(i) {
 	sourcePar.innerHTML = editor.value;
 	showPar.innerHTML = editor.value;
 	setColorsElem(showPar);
+	hierojax.processFragmentsIn(showPar);
 }
 function propagateHeaderEdit(i) {
 	const showH = document.getElementById('showh' + i);
@@ -158,6 +159,7 @@ function propagateHeaderEdit(i) {
 	sourceH.innerHTML = editor.value;
 	showH.innerHTML = editor.value;
 	setColorsElem(showH);
+	hierojax.processFragmentsIn(showH);
 }
 
 function addButtons() {
@@ -194,6 +196,7 @@ function prepareParagraphs() {
 		editor.classList.add('hidden');
 		showPar.insertAdjacentElement('afterend', sourcePar);
 		showPar.insertAdjacentElement('afterend', editor);
+		hierojax.processFragmentsIn(showPar);
 	}
 }
 function prepareHeaders() {
@@ -214,6 +217,7 @@ function prepareHeaders() {
 		editor.classList.add('hidden');
 		showH.insertAdjacentElement('afterend', sourceH);
 		showH.insertAdjacentElement('afterend', editor);
+		hierojax.processFragmentsIn(showH);
 	}
 }
 

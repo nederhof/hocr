@@ -106,7 +106,7 @@ def median_height(im, threshold=BLACK_THRESHOLD):
 	return median(heights)
 	
 if __name__ == '__main__':
-	imagefile = '/home/mjn/work/topbib/topbib/ocr/vol1/1.png'
+	imagefile = '/home/mn31/work/topbib/topbib/ocr/vol1/1.png'
 	if len(sys.argv) >= 2:
 		imagefile = [sys.argv[1]]
 	image = Image.open(imagefile)

@@ -57,7 +57,7 @@ def adjust_word(page, word, fontinfo):
 					['on', 'of', 'to', 'two', 'no.', 'nos.', 'gods', 'stool']:
 					word.style = style
 	if word.confidence < 0.8:
-		if not re.match('^[0-9\-\.,;\(\)\[\]xi]+$', word.content):
+		if not re.match('^[-0-9\\.,;\\(\\)\\[\\]xi]+$', word.content):
 			word.content = content
 	word.content = re.sub(r'\bIst\b', '1st', word.content)
 	word.content = re.sub(r'([0-9])-([0-9])', r'\1–\2', word.content)

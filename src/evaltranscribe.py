@@ -138,7 +138,7 @@ def eval_test_results(tests):
 
 def get_pages():
 	pages = []
-	d = '/home/mjn/work/topbib/topbib/ocr/vol1'
+	d = '/home/mn31/work/topbib/topbib/ocr/vol1'
 	numbers = range(1, 101)
 	# numbers = range(63, 64)
 	for num in numbers:

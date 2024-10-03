@@ -6,6 +6,7 @@ import threading
 import os
 import signal
 import logging
+import re
 
 PORT = 8000
 
@@ -24,7 +25,8 @@ def open_browser(page):
 	@app.route('/end', methods=['DELETE'])
 	def end_server():
 		text = request.json['text']
-		with open('tmp.html', 'w') as file:
+		text = re.sub(r'\n+</body>', '\n</body>', text)
+		with open(page, 'w') as file:
 			file.write(text)
 		os.kill(os.getpid(), signal.SIGTERM)
 		return 'Server shutting down...'
